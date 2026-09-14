@@ -1,0 +1,14 @@
+bin/
+obj/
+.vs/
+artifacts/
+*.user
+*.suo
+*.lnk
+*.log
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.key

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "trilink.desktop",
+  "displayName": "WinForms 桌面壳",
+  "version": "1.0.0",
+  "hostApi": "1.0",
+  "enabled": true,
+  "entryAssembly": "TriLink.Plugin.Desktop.dll",
+  "entryType": "TriLink.Plugins.Desktop.DesktopPlugin",
+  "dependencies": [],
+  "requiresServices": [
+    "trilink.room-network",
+    "trilink.device-discovery",
+    "trilink.simulation-control",
+    "trilink.plugin-catalog"
+  ],
+  "providesServices": ["trilink.desktop-shell"],
+  "capabilities": ["desktop-ui", "tray", "plugin-catalog"]
+}

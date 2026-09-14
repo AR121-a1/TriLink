@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "trilink.simulation",
+  "displayName": "三节点模拟数据源",
+  "version": "1.0.0",
+  "hostApi": "1.0",
+  "enabled": true,
+  "entryAssembly": "TriLink.Plugin.Simulation.dll",
+  "entryType": "TriLink.Plugins.Simulation.SimulationPlugin",
+  "dependencies": [],
+  "requiresServices": ["trilink.room-network"],
+  "providesServices": ["trilink.simulation-control"],
+  "capabilities": ["simulation", "three-node-demo"]
+}

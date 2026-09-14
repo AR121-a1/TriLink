@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "trilink.rooms",
+  "displayName": "Room 与副本状态机",
+  "version": "1.0.0",
+  "hostApi": "1.0",
+  "enabled": true,
+  "entryAssembly": "TriLink.Plugin.Rooms.dll",
+  "entryType": "TriLink.Plugins.Rooms.RoomsPlugin",
+  "dependencies": [],
+  "requiresServices": [],
+  "providesServices": ["trilink.room-network"],
+  "capabilities": ["room", "membership", "leader-succession", "replica-state"]
+}
