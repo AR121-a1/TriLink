@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "trilink.modules",
+  "displayName": "扩展模块管理",
+  "version": "1.0.0",
+  "hostApi": "1.0",
+  "enabled": true,
+  "entryAssembly": "TriLink.Plugin.Modules.dll",
+  "entryType": "TriLink.Plugins.Modules.ModulesPlugin",
+  "dependencies": [],
+  "requiresServices": ["trilink.plugin-catalog"],
+  "providesServices": ["trilink.module-management", "trilink.module-features"],
+  "capabilities": ["local-package-import", "next-start-configuration", "feature-registry", "safe-recovery"]
+}

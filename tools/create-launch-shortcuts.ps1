@@ -45,3 +45,8 @@ Write-TriLinkShortcut `
     '启动 TriLink（真实硬件）.lnk' `
     '' `
     '打开 TriLink ESP32-S3 USB CDC 客户端'
+
+Write-TriLinkShortcut `
+    '启动 TriLink（安全恢复）.lnk' `
+    '--safe-mode' `
+    '忽略自定义模块配置，在扩展管理中恢复内置模块；请先退出旧实例'

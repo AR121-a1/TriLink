@@ -4,7 +4,7 @@
 
 ## 日常使用与分发
 
-`artifacts/Release/` 是完整的运行目录。使用其中的两个快捷方式启动演示或硬件模式；分发时复制整个目录，不要只复制 EXE。EXE 路径保持原样，已有指向它的快捷方式仍然有效。快捷方式包含本机绝对路径；复制到其他电脑或位置后，应直接启动 EXE，或重新创建指向新位置的快捷方式。
+`artifacts/Release/` 是完整运行目录，包含演示、硬件和安全恢复三个快捷方式。分发时复制整个目录，不要只复制 EXE。快捷方式包含本机绝对路径；移到其他电脑或位置后应直接启动 EXE 或重建快捷方式。运行后生成的 `module-data/` 是模块配置与导入包，不是测试文件。
 
 ```text
 trilink_min_client/
@@ -18,7 +18,9 @@ trilink_min_client/
 │  │  ├─ TriLink.Plugin.Desktop/     窗体、托盘与桌面入口
 │  │  ├─ TriLink.Plugin.Serial/      串口适配、USB 协议和轮询策略
 │  │  ├─ TriLink.Plugin.Rooms/       房间、副本和节点状态
-│  │  └─ TriLink.Plugin.Simulation/  可选择的三节点演示功能
+│  │  ├─ TriLink.Plugin.Simulation/  三节点演示功能
+│  │  ├─ TriLink.Plugin.Modules/     扩展管理与功能注册服务
+│  │  └─ TriLink.Plugin.TextTools/   可选的文本工具功能
 │  └─ profiles/                     插件组合的源配置
 ├─ tests/                           测试源码和运行说明
 ├─ tools/                           构建、插件校验、发布检查与快捷方式生成
@@ -30,6 +32,8 @@ trilink_min_client/
    │  ├─ TriLink.PluginHost.dll
    │  ├─ 启动 TriLink（三节点演示）.lnk
    │  ├─ 启动 TriLink（真实硬件）.lnk
+   │  ├─ 启动 TriLink（安全恢复）.lnk
+   │  ├─ module-data/               首次保存配置后创建，包含独立导入包
    │  ├─ profiles/
    │  └─ plugins/<plugin-id>/        每个插件独立 DLL 与清单
    ├─ tests/Release/

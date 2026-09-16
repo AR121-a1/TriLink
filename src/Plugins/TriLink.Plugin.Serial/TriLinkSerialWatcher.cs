@@ -1,11 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
+using System.Diagnostics;
 using System.IO.Ports;
 using System.Linq;
-using System.Management;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using TriLink.Core;
@@ -16,8 +14,6 @@ namespace TriLink.MinClient.Serial
     {
         private const int DefaultConsecutiveFailureLimit = 5;
         private static readonly TimeSpan PollingInterval = TimeSpan.FromSeconds(3);
-        private static readonly Regex ComPortRegex =
-            new Regex(@"\((COM\d+)\)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         private readonly object _sync = new object();
         private readonly Dictionary<string, TriLinkDevice> _recognized =
@@ -28,6 +24,7 @@ namespace TriLink.MinClient.Serial
         private int _scanActive;
         private bool _pollingEnabled;
         private bool _disposed;
+        private string _lastDiscoveryStatus;
 
         public TriLinkSerialWatcher(int consecutiveFailureLimit = DefaultConsecutiveFailureLimit)
         {
@@ -171,48 +168,43 @@ namespace TriLink.MinClient.Serial
             return Task.Run<IReadOnlyList<TriLinkPeer>>(
                 () =>
                 {
-                    var peers = new List<TriLinkPeer>();
                     using (var port = OpenPort(portName, 900))
                     {
                         var nonce = Guid.NewGuid().ToString("N").Substring(0, 8);
                         port.WriteLine(UsbControlProtocol.EncodeSearch(nonce));
-                        var deadline = DateTime.UtcNow.AddMilliseconds(1200);
-                        while (DateTime.UtcNow < deadline)
-                        {
-                            string line;
-                            try
-                            {
-                                line = port.ReadLine().Trim();
-                            }
-                            catch (TimeoutException)
-                            {
-                                continue;
-                            }
-
-                            if (UsbControlProtocol.IsSearchEnd(line, nonce))
-                            {
-                                break;
-                            }
-
-                            UsbPeerAdvertisement advertisement;
-                            if (UsbControlProtocol.TryParsePeer(line, out advertisement))
-                            {
-                                peers.Add(
-                                    new TriLinkPeer
-                                    {
-                                        NodeId = advertisement.NodeId,
-                                        DisplayName = advertisement.DisplayName,
-                                        Rssi = advertisement.Rssi,
-                                        RoomId = advertisement.RoomId,
-                                        RoomName = advertisement.RoomName,
-                                        LeaderNodeId = advertisement.LeaderNodeId,
-                                    });
-                            }
-                        }
+                        var elapsed = Stopwatch.StartNew();
+                        return ReadSearchResponse(
+                            () => port.ReadLine().Trim(), nonce, () => elapsed.ElapsedMilliseconds < 1200);
                     }
-
-                    return peers.AsReadOnly();
                 });
+        }
+
+        internal static IReadOnlyList<TriLinkPeer> ReadSearchResponse(
+            Func<string> readLine, string nonce, Func<bool> beforeDeadline)
+        {
+            var peers = new List<TriLinkPeer>();
+            while (beforeDeadline())
+            {
+                string line;
+                try { line = readLine(); }
+                catch (TimeoutException) { continue; }
+                if (UsbControlProtocol.IsSearchEnd(line, nonce)) { return peers.AsReadOnly(); }
+                UsbPeerAdvertisement advertisement;
+                if (UsbControlProtocol.TryParsePeer(line, out advertisement))
+                {
+                    if (peers.Count >= 64) { throw new System.IO.InvalidDataException("邻居响应超过客户端安全上限。"); }
+                    peers.Add(new TriLinkPeer
+                    {
+                        NodeId = advertisement.NodeId,
+                        DisplayName = advertisement.DisplayName,
+                        Rssi = advertisement.Rssi,
+                        RoomId = advertisement.RoomId,
+                        RoomName = advertisement.RoomName,
+                        LeaderNodeId = advertisement.LeaderNodeId,
+                    });
+                }
+            }
+            throw new TimeoutException("S3 未返回匹配的 END，不能把超时当作发现 0 台；请检查原生 USB 数据口。");
         }
 
         public void Dispose()
@@ -360,74 +352,31 @@ namespace TriLink.MinClient.Serial
 
         private List<SerialCandidate> EnumerateCandidates()
         {
-            var candidates = new Dictionary<string, SerialCandidate>(
-                StringComparer.OrdinalIgnoreCase);
-
-            using (var searcher = new ManagementObjectSearcher(
-                "SELECT DeviceID, Name, PNPDeviceID, Manufacturer FROM Win32_SerialPort"))
-            using (var results = searcher.Get())
+            var present = WindowsSerialPortCatalog.Enumerate();
+            var candidates = SelectCandidates(present, _manualPorts);
+            var bridges = string.Join(", ", present.Where(port => port.IsProgrammingBridge)
+                .Select(port => port.PortName));
+            var status = candidates.Count == 0
+                ? (bridges.Length == 0 ? "未检测到 S3 原生 USB 数据口。"
+                    : "检测到烧录口 " + bridges + "，不是 TriLink 数据口。")
+                    + "请连接 S3 原生 USB（VID_303A）；未执行模拟搜索。"
+                : "串口枚举正常：发现 " + candidates.Count + " 个候选数据口，身份以 HELLO 握手为准。";
+            if (!string.Equals(status, _lastDiscoveryStatus, StringComparison.Ordinal))
             {
-                foreach (ManagementObject item in results)
-                {
-                    var portName = Convert.ToString(item["DeviceID"], CultureInfo.InvariantCulture);
-                    var name = Convert.ToString(item["Name"], CultureInfo.InvariantCulture);
-                    if (string.IsNullOrWhiteSpace(portName))
-                    {
-                        var match = ComPortRegex.Match(name ?? string.Empty);
-                        portName = match.Success ? match.Groups[1].Value : null;
-                    }
-
-                    if (string.IsNullOrWhiteSpace(portName))
-                    {
-                        continue;
-                    }
-
-                    var candidate = new SerialCandidate
-                    {
-                        PortName = portName,
-                        Name = name ?? string.Empty,
-                        PnpDeviceId = Convert.ToString(
-                            item["PNPDeviceID"],
-                            CultureInfo.InvariantCulture) ?? string.Empty,
-                        Manufacturer = Convert.ToString(
-                            item["Manufacturer"],
-                            CultureInfo.InvariantCulture) ?? string.Empty,
-                    };
-                    if (LooksLikeTriLink(candidate) || _manualPorts.Contains(portName))
-                    {
-                        candidates[portName] = candidate;
-                    }
-                }
+                _lastDiscoveryStatus = status;
+                RaiseStatus(status);
             }
-
-            foreach (var manualPort in _manualPorts)
-            {
-                if (!candidates.ContainsKey(manualPort))
-                {
-                    candidates[manualPort] = new SerialCandidate
-                    {
-                        PortName = manualPort,
-                        Name = "Manually configured TriLink port",
-                        PnpDeviceId = string.Empty,
-                        Manufacturer = string.Empty,
-                    };
-                }
-            }
-
-            return candidates.Values.ToList();
+            return candidates;
         }
 
-        private static bool LooksLikeTriLink(SerialCandidate candidate)
+        internal static List<SerialCandidate> SelectCandidates(
+            IEnumerable<SerialCandidate> present, IEnumerable<string> manualPorts)
         {
-            return ContainsIgnoreCase(candidate.Name, "TriLink")
-                || ContainsIgnoreCase(candidate.Manufacturer, "TriLink")
-                || ContainsIgnoreCase(candidate.PnpDeviceId, "VID_303A");
-        }
-
-        private static bool ContainsIgnoreCase(string value, string fragment)
-        {
-            return value != null
-                && value.IndexOf(fragment, StringComparison.OrdinalIgnoreCase) >= 0;
+            var manual = new HashSet<string>(manualPorts, StringComparer.OrdinalIgnoreCase);
+            return present.Where(port => port.IsValidPort
+                    && (port.IsProtocolCandidate || manual.Contains(port.PortName)))
+                .GroupBy(port => port.PortName, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First()).ToList();
         }
 
         private static bool TryRecognize(
@@ -550,15 +499,5 @@ namespace TriLink.MinClient.Serial
             }
         }
 
-        private sealed class SerialCandidate
-        {
-            public string PortName { get; set; }
-
-            public string Name { get; set; }
-
-            public string PnpDeviceId { get; set; }
-
-            public string Manufacturer { get; set; }
-        }
     }
 }

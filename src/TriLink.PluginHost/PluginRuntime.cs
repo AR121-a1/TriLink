@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Security.Cryptography;
-using System.Web.Script.Serialization;
 using TriLink.Plugin;
 
 namespace TriLink.PluginHost
@@ -125,13 +124,15 @@ namespace TriLink.PluginHost
                         profile.name));
             }
 
-            var selected = new HashSet<string>(
-                profile.PluginIds,
-                StringComparer.OrdinalIgnoreCase);
+            var store = new ModuleStore(environment, fullRoot, profilePath);
+            var safeMode = environment.Arguments.Any(value => string.Equals(value, "--safe-mode", StringComparison.OrdinalIgnoreCase));
+            var selection = store.ReadSelection(safeMode);
+            store.Validate(selection);
+            var selected = new HashSet<string>(selection.enabled, StringComparer.OrdinalIgnoreCase);
             var runtime = new PluginRuntime(environment, log);
             try
             {
-                runtime.DiscoverAndConfigure(fullRoot, selected);
+                runtime.DiscoverAndConfigure(fullRoot, selected, store.Resolve(selection));
                 return runtime;
             }
             catch
@@ -211,39 +212,16 @@ namespace TriLink.PluginHost
 
         private void DiscoverAndConfigure(
             string pluginRoot,
-            ISet<string> selectedPluginIds)
+            ISet<string> selectedPluginIds,
+            IReadOnlyList<PluginManifest> resolved = null)
         {
-            var serializer = new JavaScriptSerializer();
-            var manifests = new List<PluginManifest>();
+            var manifests = (resolved ?? Directory.GetDirectories(pluginRoot)
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .Select(directory => Path.Combine(directory, "plugin.json"))
+                .Where(File.Exists).Select(ModuleStore.ReadManifest).ToList()).ToList();
             var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var directory in Directory.GetDirectories(pluginRoot)
-                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+            foreach (var manifest in manifests)
             {
-                var manifestPath = Path.Combine(directory, "plugin.json");
-                if (!File.Exists(manifestPath))
-                {
-                    continue;
-                }
-
-                PluginManifest manifest;
-                try
-                {
-                    manifest = serializer.Deserialize<PluginManifest>(
-                        File.ReadAllText(manifestPath));
-                }
-                catch (Exception exception)
-                {
-                    throw new InvalidDataException(
-                        "Invalid plugin manifest: " + manifestPath,
-                        exception);
-                }
-
-                if (manifest == null)
-                {
-                    throw new InvalidDataException("Empty plugin manifest: " + manifestPath);
-                }
-
-                manifest.SourceDirectory = directory;
                 manifest.Validate();
                 if (!ids.Add(manifest.id))
                 {
@@ -256,7 +234,6 @@ namespace TriLink.PluginHost
                     manifest.enabled = false;
                 }
 
-                manifests.Add(manifest);
                 _descriptors.Add(CreateDescriptor(manifest));
             }
 

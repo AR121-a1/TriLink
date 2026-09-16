@@ -2,6 +2,8 @@
 
 状态：**可扩展；宿主 API 1.0；插件更新边界为重启加载。**
 
+本地 0.14 新增显式“扩展模块”入口、独立 `trilink.modules` 管理插件和可运行的 `trilink.text-tools` 示例。GUI 导入使用独立包目录与下次启动配置；下文开发构建则会更新内置包，两条路径不要混淆。完整说明见 [模块管理](MODULE_MANAGEMENT.md)。
+
 ## 设计依据与取舍
 
 本平台借鉴 DeepSeek Harness/Cordis 的架构约束，而不是照搬其 Node.js 实现：
@@ -41,6 +43,8 @@ TriLink.MinClient.exe                 只做单实例、profile 选择、启动�
 | `trilink.device-discovery` | `IDeviceDiscoveryService` | 串口插件 | 桌面插件 |
 | `trilink.simulation-control` | `ISimulationControl` | 模拟插件 | 桌面插件 |
 | `trilink.desktop-shell` | `IDesktopShell` | 桌面插件 | 宿主 |
+| `trilink.module-management` | `IModuleManagementService` | 扩展管理插件 | 桌面插件 |
+| `trilink.module-features` | `IModuleFeatureRegistry` | 扩展管理插件 | 桌面、文本工具及后续功能插件 |
 
 插件通过 `requiresServices` 声明注入项，通过 `providesServices` 声明输出。加载器保证：
 
@@ -94,7 +98,7 @@ Discovered → Configured → Active → Stopped
 
 ## 构建和只更新一个功能
 
-完整构建、测试清单/依赖、运行 88 项逻辑检查并渲染两个 UI 门：
+完整构建、测试清单/依赖、运行 101 项核心检查、模块检查、桌面回归及 UI 渲染门：
 
 ```powershell
 .\tools\build.ps1
@@ -121,6 +125,8 @@ Discovered → Configured → Active → Stopped
 客户端运行中更新 DLL 可能被系统拒绝；应先从托盘退出，更新后重新启动。第一版不承诺热卸载：.NET Framework 4.8 不能单独卸载默认 `AppDomain` 中的程序集，强行覆盖会留下旧类型和事件订阅。若未来要运行不受信任的社区插件，应新增“插件进程 + 命名管道 RPC”隔离层，而不是扩大当前进程内 ABI。
 
 ## 新增或替换插件
+
+已知功能窗口可直接参照 `TriLink.Plugin.TextTools`，声明 `trilink.module-features` 后注册按需工厂。外部包通过 GUI 导入无需修改 Composition Root；要作为内置包随源码构建时才需要加 profile / build 入口。命令行 `pluginctl` 仍校验原始内置包与 profile；有效覆盖配置由同一 `ModuleStore` 在保存和真实启动时验证。
 
 新增可替换能力时按以下顺序：
 

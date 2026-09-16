@@ -5,6 +5,8 @@
     "trilink.rooms",
     "trilink.serial",
     "trilink.simulation",
-    "trilink.desktop"
+    "trilink.desktop",
+    "trilink.modules",
+    "trilink.text-tools"
   ]
 }

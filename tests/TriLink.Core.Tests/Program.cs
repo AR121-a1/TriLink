@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using TriLink.Core;
 using TriLink.Plugin;
 using TriLink.PluginHost;
+using TriLink.MinClient.Serial;
 
 namespace TriLink.Core.Tests
 {
@@ -16,14 +18,31 @@ namespace TriLink.Core.Tests
         private static int _checks;
         private static int _failures;
 
-        private static int Main()
+        private static int Main(string[] args)
         {
+            if (args.Contains("--serial-inventory"))
+            {
+                var timer = System.Diagnostics.Stopwatch.StartNew();
+                var ports = WindowsSerialPortCatalog.Enumerate();
+                foreach (var port in ports)
+                {
+                    Console.WriteLine("{0} | {1} | {2} | probe={3}",
+                        port.PortName, port.Name, port.PnpDeviceId, port.IsProtocolCandidate);
+                }
+                Console.WriteLine("PASS read-only SetupAPI enumeration: ports={0}, ms={1}; no COM opened",
+                    ports.Count, timer.ElapsedMilliseconds);
+                return 0;
+            }
             TestWaitingRoomAndLeaderApproval();
+            TestSixMemberCapacity();
+            TestFullRoomNetworkGuards();
             TestInvitationFromNonLeaderAndSuccession();
             TestDirectJoinThroughAnyRoomMember();
             TestReplicaIsolation();
             TestUsbRecognitionProtocol();
             TestPollingFailureLimiter();
+            TestSerialCandidates();
+            TestSearchResponseCompletion();
             TestPluginDependencyGraph();
             TestPluginServices();
             TestPluginProfile();
@@ -63,6 +82,97 @@ namespace TriLink.Core.Tests
             Check(room.Snapshot.Lifecycle == RoomLifecycle.Formed, "two members form room");
             Check(room.Replicas.Count == 2, "both members hold replicas");
             Check(room.ReplicasAgree(), "two replicas agree");
+        }
+
+        private static void TestSixMemberCapacity()
+        {
+            var room = RoomSession.Create(NodeA, "A", "Capacity");
+            var requests = new List<OperationResult>();
+            for (int i = 2; i <= 7; i++)
+            {
+                requests.Add(room.RequestJoin("member-" + i, "Member " + i, NodeA));
+                Check(requests.Last().Success, "queued join before capacity reached");
+            }
+            for (int i = 0; i < 5; i++)
+                Check(room.ApproveJoin(NodeA, requests[i].RequestId).Success, "admit through member six");
+            Check(room.Snapshot.Members.Count == 6, "six includes creator");
+            Check(room.Replicas.Count == 6 && room.ReplicasAgree(), "six replicas agree");
+            var before = room.Snapshot;
+            Check(!room.RequestJoin("member-8", "Eight", NodeA).Success, "full room rejects new request");
+            Check(!room.ApproveJoin(NodeA, requests[5].RequestId).Success, "queued approval cannot overbook");
+            Check(before.HasEquivalentState(room.Snapshot), "failed admission preserves state and revision");
+            Check(room.Snapshot.PendingJoinRequests.Count == 1, "blocked request is retained");
+            Check(room.Leave("member-2").Success, "member frees one place");
+            Check(room.ApproveJoin(NodeA, requests[5].RequestId).Success, "retained request admitted after vacancy");
+            Check(room.Snapshot.Members.Count == 6 && room.ReplicasAgree(), "capacity stable after replacement");
+            Check(room.Leave(NodeA).Success && room.IsLeader("member-3"), "earliest remaining member inherits at six");
+        }
+
+        private static void TestFullRoomNetworkGuards()
+        {
+            var network = new SimulatedNetwork();
+            for (int i = 1; i <= 7; i++)
+                network.AddOrUpdateNode(new NodeInfo("node-" + i, "Node " + i, true) { IsOnline = true });
+            Check(network.CreateRoom("node-1", "Six").Success, "six-node network creates room");
+            for (int i = 2; i <= 6; i++)
+            {
+                var request = network.RequestJoin("node-" + i, "node-1");
+                Check(request.Success && network.ApproveJoin("node-1", request.RequestId).Success,
+                    "network admits each of five peers");
+            }
+            Check(!network.Invite("node-2", "node-7").Success, "ordinary member cannot invite into full room");
+            Check(network.GetPendingInvitations("node-7").Count == 0, "rejected invitation leaves no pending state");
+            Check(!network.RequestJoin("node-7", "node-2").Success, "join through ordinary member respects capacity");
+            Check(!network.SearchNearby("node-7").Any(item => item.CanRequestJoin), "full room disables join choice");
+            Check(!network.SearchNearby("node-2").Any(item => item.CanInvite), "full room disables invite choice");
+            Check(network.LeaveRoom("node-6").Success, "network releases one capacity slot");
+            Check(network.SearchNearby("node-7").Any(item => item.CanRequestJoin), "vacancy enables join choice");
+            Check(network.Invite("node-2", "node-7").Success, "ordinary member can invite after vacancy");
+        }
+
+        private static void TestSerialCandidates()
+        {
+            var native = new SerialCandidate { PortName = "COM16", PnpDeviceId = @"USB\VID_303A&PID_1001\NODE" };
+            var bridge = new SerialCandidate { PortName = "COM13", Name = "USB-SERIAL CH340", PnpDeviceId = @"USB\VID_1A86&PID_7523\NODE" };
+            var bridge343 = new SerialCandidate { PortName = "COM11", PnpDeviceId = @"USB\VID_1A86&PID_55D3\NODE" };
+            var bluetooth = new SerialCandidate { PortName = "COM3", Name = "Bluetooth", PnpDeviceId = "BTHENUM" };
+            var described = new SerialCandidate { PortName = "COM17", Name = "TriLink Node" };
+            var malformed = new SerialCandidate { PortName = "COM0", Name = "TriLink Node" };
+            var unrelatedVid = new SerialCandidate { PortName = "COM18", PnpDeviceId = @"USB\VID_303AB&PID_1001" };
+            var ports = new[] { native, bridge, bridge343, bluetooth, described, malformed, unrelatedVid, native };
+            var automatic = TriLinkSerialWatcher.SelectCandidates(ports, new string[0]);
+            Check(automatic.Count == 2, "only native/named present ports are automatic candidates, deduplicated");
+            Check(automatic.Contains(native) && automatic.Contains(described), "VID and product-name discovery supported");
+            Check(!bridge.IsProtocolCandidate && bridge.IsProgrammingBridge, "CH340 is programming-only by default");
+            Check(!bridge343.IsProtocolCandidate && bridge343.IsProgrammingBridge, "CH343 is programming-only by default");
+            Check(!bluetooth.IsProtocolCandidate, "Bluetooth is not probed automatically");
+            Check(!malformed.IsValidPort && !unrelatedVid.IsProtocolCandidate, "invalid COM and partial VID are rejected");
+            Check(TriLinkSerialWatcher.SelectCandidates(ports, new[] { "com13", "COM99" }).Count == 3,
+                "explicit manual override works case-insensitively, absent port is not invented");
+            Check(TriLinkSerialWatcher.SelectCandidates(new SerialCandidate[0], new[] { "COM13" }).Count == 0,
+                "empty inventory remains empty with stale manual configuration");
+        }
+
+        private static void TestSearchResponseCompletion()
+        {
+            const string nonce = "abcdef12";
+            var empty = new Queue<string>(new[] { "TRILINK/1 END " + nonce });
+            Check(TriLinkSerialWatcher.ReadSearchResponse(empty.Dequeue, nonce, () => empty.Count > 0).Count == 0,
+                "matching END makes zero peers a valid completed search");
+            var wrong = new Queue<string>(new[] { "TRILINK/1 END deadbeef" });
+            Check(Throws<TimeoutException>(() => TriLinkSerialWatcher.ReadSearchResponse(
+                wrong.Dequeue, nonce, () => wrong.Count > 0)), "wrong END cannot report successful zero-peer search");
+            var partial = new Queue<string>(new[] { "TRILINK/1 PEER 20:00:00:00:00:02 Qg== -43 - - - 1" });
+            Check(Throws<TimeoutException>(() => TriLinkSerialWatcher.ReadSearchResponse(
+                partial.Dequeue, nonce, () => partial.Count > 0)), "partial peer list without END is a failure");
+            var complete = new Queue<string>(new[] {
+                "boot diagnostic noise", "TRILINK/1 PEER 20:00:00:00:00:02 Qg== -43 - - - 1", "TRILINK/1 END " + nonce });
+            Check(TriLinkSerialWatcher.ReadSearchResponse(complete.Dequeue, nonce, () => complete.Count > 0).Count == 1,
+                "valid completed response tolerates unrelated diagnostic lines");
+            var reads = 0;
+            Check(Throws<TimeoutException>(() => TriLinkSerialWatcher.ReadSearchResponse(
+                () => { reads++; throw new TimeoutException(); }, nonce, () => reads < 2)),
+                "repeated read timeout is bounded and reported as failure");
         }
 
         private static void TestInvitationFromNonLeaderAndSuccession()

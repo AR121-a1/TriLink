@@ -13,6 +13,9 @@ namespace TriLink.Plugins.Desktop
         private IDeviceDiscoveryService _deviceDiscovery;
         private ISimulationControl _simulation;
         private IPluginCatalog _catalog;
+        private IModuleManagementService _moduleManager;
+        private IModuleFeatureRegistry _moduleFeatures;
+        private bool _showModules;
         private bool _demoMode;
         private bool _showPluginsOnStart;
         private string _profileName;
@@ -23,6 +26,9 @@ namespace TriLink.Plugins.Desktop
             _deviceDiscovery = context.GetRequired<IDeviceDiscoveryService>();
             _simulation = context.GetRequired<ISimulationControl>();
             _catalog = context.GetRequired<IPluginCatalog>();
+            _moduleManager = context.GetRequired<IModuleManagementService>();
+            _moduleFeatures = context.GetRequired<IModuleFeatureRegistry>();
+            _showModules = context.Environment.Arguments.Any(arg => arg == "--modules" || arg == "--safe-mode");
             _demoMode = context.Environment.DemoMode;
             _profileName = context.Environment.ProfileName;
             _showPluginsOnStart = context.Environment.Arguments.Any(
@@ -44,14 +50,18 @@ namespace TriLink.Plugins.Desktop
 
         public Form CreateMainWindow()
         {
-            return new MainForm(
+            var form = new MainForm(
                 _demoMode,
                 _showPluginsOnStart,
                 _network,
                 _deviceDiscovery,
                 _simulation,
                 _catalog,
-                _profileName);
+                _profileName,
+                _moduleManager,
+                _moduleFeatures);
+            if (_showModules) { form.Shown += (_, __) => form.OpenModules(); }
+            return form;
         }
 
         public void SaveScreenshot(Form form, string path)

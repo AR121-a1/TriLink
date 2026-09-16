@@ -28,6 +28,8 @@ namespace TriLink.Plugin
         public const string DeviceDiscovery = "trilink.device-discovery";
         public const string SimulationControl = "trilink.simulation-control";
         public const string DesktopShell = "trilink.desktop-shell";
+        public const string ModuleManagement = "trilink.module-management";
+        public const string ModuleFeatures = "trilink.module-features";
     }
 
     public static class PluginServiceContract

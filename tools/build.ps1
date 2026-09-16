@@ -8,6 +8,8 @@ param(
         'trilink.rooms',
         'trilink.serial',
         'trilink.simulation',
+        'trilink.modules',
+        'trilink.text-tools',
         'trilink.desktop')]
     [string]$PluginId = 'all'
 )
@@ -157,10 +159,7 @@ function Compile-SerialPlugin {
         'TriLink.Plugin.Serial.dll' `
         $sourceDirectory `
         (Get-SourceFiles $sourceDirectory) `
-        @(
-            $abstractions,
-            (Join-Path $framework 'System.Management.dll')
-        )
+        @($abstractions)
 }
 
 function Compile-SimulationPlugin {
@@ -187,12 +186,28 @@ function Compile-DesktopPlugin {
         )
 }
 
+function Compile-ModulesPlugin {
+    $sourceDirectory = Join-Path $projectRoot 'src\Plugins\TriLink.Plugin.Modules'
+    Deploy-Plugin 'trilink.modules' 'TriLink.Plugin.Modules.dll' $sourceDirectory `
+        (Get-SourceFiles $sourceDirectory) `
+        @($abstractions, $pluginHost, (Join-Path $framework 'System.Windows.Forms.dll'))
+}
+
+function Compile-TextToolsPlugin {
+    $sourceDirectory = Join-Path $projectRoot 'src\Plugins\TriLink.Plugin.TextTools'
+    Deploy-Plugin 'trilink.text-tools' 'TriLink.Plugin.TextTools.dll' $sourceDirectory `
+        (Get-SourceFiles $sourceDirectory) `
+        @($abstractions, (Join-Path $framework 'System.Windows.Forms.dll'), (Join-Path $framework 'System.Drawing.dll'))
+}
+
 function Invoke-PluginSelection([string]$Id) {
     switch ($Id) {
         'trilink.rooms' { Compile-RoomsPlugin }
         'trilink.serial' { Compile-SerialPlugin }
         'trilink.simulation' { Compile-SimulationPlugin }
         'trilink.desktop' { Compile-DesktopPlugin }
+        'trilink.modules' { Compile-ModulesPlugin }
+        'trilink.text-tools' { Compile-TextToolsPlugin }
         default { throw "Unknown plugin id: $Id" }
     }
 }
@@ -243,7 +258,8 @@ function Invoke-DesktopLifecycleTest {
         'exe' `
         $desktopTests `
         (Get-SourceFiles (Join-Path $projectRoot 'tests\TriLink.Desktop.Tests')) `
-        @($abstractions, $pluginHost, (Join-Path $framework 'System.Windows.Forms.dll'))
+        @($abstractions, $pluginHost, (Join-Path $framework 'System.Windows.Forms.dll'),
+            (Join-Path $framework 'System.Drawing.dll'))
 
     foreach ($dependency in @($abstractions, $pluginHost)) {
         Copy-Item -LiteralPath $dependency -Destination $testOutput -Force
@@ -255,6 +271,43 @@ function Invoke-DesktopLifecycleTest {
     }
 }
 
+function Invoke-CoreTests {
+    $tests = Join-Path $testOutput 'TriLink.Core.Tests.exe'
+    $roomsAssembly = Join-Path $pluginOutput 'trilink.rooms\TriLink.Plugin.Rooms.dll'
+    $serialAssembly = Join-Path $pluginOutput 'trilink.serial\TriLink.Plugin.Serial.dll'
+    Invoke-Compile `
+        'TriLink.Core.Tests' `
+        'exe' `
+        $tests `
+        (Get-SourceFiles (Join-Path $projectRoot 'tests\TriLink.Core.Tests')) `
+        @($abstractions, $pluginHost, $roomsAssembly, $serialAssembly,
+            (Join-Path $framework 'System.Web.Extensions.dll'))
+    foreach ($dependency in @($abstractions, $pluginHost, $roomsAssembly, $serialAssembly)) {
+        Copy-Item -LiteralPath $dependency -Destination $testOutput -Force
+    }
+    & $tests | Tee-Object -FilePath (Join-Path $logOutput 'core-tests.log')
+    if ($LASTEXITCODE -ne 0) { throw "Core tests failed with exit code $LASTEXITCODE" }
+}
+
+function Invoke-ModuleTests {
+    Invoke-Compile 'TriLink.ModuleProbe' 'exe' (Join-Path $testOutput 'TriLink.ModuleProbe.exe') `
+        (Get-SourceFiles (Join-Path $projectRoot 'tests\TriLink.ModuleProbe')) `
+        @($abstractions, $pluginHost)
+    $moduleTests = Join-Path $testOutput 'TriLink.Modules.Tests.exe'
+    $modulesAssembly = Join-Path $pluginOutput 'trilink.modules\TriLink.Plugin.Modules.dll'
+    $textToolsAssembly = Join-Path $pluginOutput 'trilink.text-tools\TriLink.Plugin.TextTools.dll'
+    Invoke-Compile 'TriLink.Modules.Tests' 'exe' $moduleTests `
+        (Get-SourceFiles (Join-Path $projectRoot 'tests\TriLink.Modules.Tests')) `
+        @($abstractions, $pluginHost, $modulesAssembly, $textToolsAssembly,
+            (Join-Path $framework 'System.Web.Extensions.dll'),
+            (Join-Path $framework 'System.Windows.Forms.dll'), (Join-Path $framework 'System.Drawing.dll'))
+    foreach ($dependency in @($abstractions, $pluginHost, $modulesAssembly, $textToolsAssembly)) {
+        Copy-Item -LiteralPath $dependency -Destination $testOutput -Force
+    }
+    & $moduleTests $output | Tee-Object -FilePath (Join-Path $logOutput 'modules-tests.log')
+    if ($LASTEXITCODE -ne 0) { throw "Module tests failed with exit code $LASTEXITCODE" }
+}
+
 if ($PluginId -ne 'all') {
     if (-not (Test-Path -LiteralPath $abstractions -PathType Leaf)) {
         throw 'Run a full build once before building an individual plugin.'
@@ -264,9 +317,11 @@ if ($PluginId -ne 'all') {
     }
 
     Invoke-PluginSelection $PluginId
+    if ($PluginId -in @('trilink.serial', 'trilink.rooms')) { Invoke-CoreTests }
     Invoke-PluginValidation
     Invoke-UiSmoke 'ui-plugin-update-smoke.png' @('--plugins-view')
-    if ($PluginId -eq 'trilink.desktop') {
+    if ($PluginId -in @('trilink.desktop', 'trilink.modules', 'trilink.text-tools')) {
+        Invoke-ModuleTests
         Invoke-DesktopLifecycleTest
     }
     & (Join-Path $PSScriptRoot 'check-release-layout.ps1') -Configuration $Configuration
@@ -279,6 +334,8 @@ Compile-PluginHost
 Compile-RoomsPlugin
 Compile-SerialPlugin
 Compile-SimulationPlugin
+Compile-ModulesPlugin
+Compile-TextToolsPlugin
 Compile-DesktopPlugin
 Copy-Item -LiteralPath (Join-Path $projectRoot 'src\profiles\desktop.profile.json') `
     -Destination (Join-Path $profileOutput 'desktop.profile.json') `
@@ -295,30 +352,8 @@ Invoke-Compile `
         (Join-Path $framework 'System.Windows.Forms.dll')
     )
 
-$tests = Join-Path $testOutput 'TriLink.Core.Tests.exe'
-$roomsAssembly = Join-Path $pluginOutput 'trilink.rooms\TriLink.Plugin.Rooms.dll'
-$serialAssembly = Join-Path $pluginOutput 'trilink.serial\TriLink.Plugin.Serial.dll'
-Invoke-Compile `
-    'TriLink.Core.Tests' `
-    'exe' `
-    $tests `
-    (Get-SourceFiles (Join-Path $projectRoot 'tests\TriLink.Core.Tests')) `
-    @(
-        $abstractions,
-        $pluginHost,
-        $roomsAssembly,
-        $serialAssembly,
-        (Join-Path $framework 'System.Web.Extensions.dll')
-    )
-
-foreach ($dependency in @($abstractions, $pluginHost, $roomsAssembly, $serialAssembly)) {
-    Copy-Item -LiteralPath $dependency -Destination $testOutput -Force
-}
-
-& $tests | Tee-Object -FilePath (Join-Path $logOutput 'core-tests.log')
-if ($LASTEXITCODE -ne 0) {
-    throw "Core tests failed with exit code $LASTEXITCODE"
-}
+Invoke-CoreTests
+Invoke-ModuleTests
 
 Invoke-PluginValidation
 Invoke-UiSmoke 'ui-smoke.png' @()

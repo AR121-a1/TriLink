@@ -151,7 +151,9 @@ namespace TriLink.MinClient
             }
 
             MessageBox.Show(
-                "插件平台启动失败：" + exception.Message,
+                "插件平台启动失败：" + exception.Message
+                    + "\r\n\r\n请运行“启动 TriLink（安全恢复）”快捷方式，或加 --safe-mode。"
+                    + "\r\n安全模式忽略导入包与自定义启停配置；在扩展模块中选择“恢复内置模块”。",
                 "TriLink",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);

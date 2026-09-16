@@ -1,6 +1,8 @@
 # TriLink USB 与 Room 最小契约
 
-状态：客户端已实现，等待 ESP32-S3 原生 USB 后端对接和三板实测。
+状态（2026-09-16）：TRILINK/1 识别/发现已对接真实固件；Room 状态机仍是本机模拟后端。
+Room 插件 1.1.0 上限为 6 人（包含本机），在加入请求、邀请、批准和搜索操作可用性中检查。
+固件 v0.8 的 TRILINK/3 / ROUTE format 2 是自动选路传输夹具，不是本页建议的 Room 管理协议；真实跨电脑 Room 与三板验收未完成。
 
 ## 1. 层次边界
 
@@ -13,7 +15,7 @@ PC link: native USB CDC ACM (UTF-8 line control protocol in MVP)
     |
 local S3: APP_DATA Room service dispatcher
     |
-ESP-NOW unicast/broadcast between three S3 nodes
+ESP-NOW transport among at most six provisioned S3 members
 ```
 
 USB 文本协议不直接跨 ESP-NOW。S3 应把 USB 命令转为定长二进制 Room service 消息；无线回调只复制有界帧并投递队列。
@@ -72,7 +74,7 @@ Room 使用“对等复制、单协调者”模型：
 - 一人新建 Room 处于 `WAITING`，允许被搜索和加入；
 - Room 曾达到两人后状态为 `FORMED`，随后降到一人立即广播 `ROOM_DISSOLVE` 并清除本地映射。
 
-意外掉电时，三节点 Room 的成员变更应要求至少两个当前成员确认；否则网络分区可能产生两个 leader。最小客户端目前只验证显式退出，失联 quorum 是固件阶段的独立验收门。
+意外掉电时，应先暂停成员变更；若后续实现自动继任，需要已提交成员集合的多数确认（floor(N/2)+1）及持久化任期/日志，不能仍将三人的“两票”规则套用于六人。最小客户端目前只验证显式退出，分区安全是独立验收门。
 
 ## 5. 无线 Room service 建议
 
@@ -91,18 +93,18 @@ Room 使用“对等复制、单协调者”模型：
 | `SNAPSHOT` | 全成员状态快照 |
 | `ROOM_DISSOLVE` | 正式 Room 降为一人 |
 
-最大三人时，一个紧凑快照可控制在当前 168 字节 service data 上限内：
+以下是未来六人成员快照的初步预算，不是已实现 wire codec。v0.8 路由之后只有 132 B 数据空间，还需扣除内部 Room 消息头；原 168 B 不能全当业务载荷：
 
 ```text
 room_id(4) + term(4) + revision(4) + lifecycle(1)
 + leader_mac(6) + member_count(1)
-+ 3 * [member_mac(6) + join_order(2)]
++ 6 * [member_mac(6) + join_order(2)]
 + pending_count(1)
 + 2 * [request_id(4) + candidate_mac(6) + inviter_mac(6)]
-= 77 bytes
+= 101 bytes
 ```
 
-即使再加 32 字节 Room 名和少量标志仍低于 168 字节，不需要分片，也不应引入 JSON、lwIP 或 WebSocket。
+再加 32 B Room 名就达到 133 B，尚未计内部头、认证和更大的待审批队列，不能承诺单帧。应把有界成员快照、名称和申请队列拆开，或引入有界分片重组。join_order 位宽/耗尽也须在 codec 定稿时定义；当前 C# 使用 long，不能静默截成 u16。
 
 ## 6. 顺序与副本规则
 
@@ -118,4 +120,3 @@ room_id, term, revision, actor_mac, operation_id
 - 低 term 事件丢弃；
 - 新 leader 的第一条事件必须附带前一副本摘要；
 - leader 只串行化成员关系，不接管聊天、文件和游戏状态；这些数据仍由发布者点对点发送并按需要复制。
-

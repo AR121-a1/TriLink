@@ -6,6 +6,8 @@ namespace TriLink.Core
 {
     public sealed class RoomSession : IRoomSession
     {
+        // Includes the creator/local member. Admission must recheck queued requests.
+        public const int MaxMembers = 6;
         private readonly List<RoomEvent> _events = new List<RoomEvent>();
         private readonly Dictionary<string, RoomReplica> _replicas =
             new Dictionary<string, RoomReplica>(StringComparer.Ordinal);
@@ -106,6 +108,11 @@ namespace TriLink.Core
                 return OperationResult.Fail("该节点已有待处理的加入申请。");
             }
 
+            if (_state.Members.Count >= MaxMembers)
+            {
+                return OperationResult.Fail("房间已满（最多 6 人，包含本机）。");
+            }
+
             var request = new JoinRequest(
                 "J-" + Guid.NewGuid().ToString("N").Substring(0, 8).ToUpperInvariant(),
                 candidateNodeId,
@@ -133,6 +140,11 @@ namespace TriLink.Core
             if (request == null)
             {
                 return OperationResult.Fail("加入申请不存在或已经处理。");
+            }
+
+            if (_state.Members.Count >= MaxMembers)
+            {
+                return OperationResult.Fail("房间已满（最多 6 人）；申请保留，空出位置后可重试。");
             }
 
             _state.PendingJoinRequests.Remove(request);

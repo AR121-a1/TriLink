@@ -10,7 +10,7 @@ namespace TriLink.PluginHost
     public sealed class PluginManifest
     {
         private static readonly Regex PluginIdRegex = new Regex(
-            @"^[a-z0-9]+(?:[.-][a-z0-9]+)*$",
+            @"\A[a-z0-9]+(?:[.-][a-z0-9]+)*\z",
             RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
         public int schemaVersion { get; set; }
@@ -71,6 +71,8 @@ namespace TriLink.PluginHost
             }
 
             if (string.IsNullOrWhiteSpace(entryAssembly)
+                || entryAssembly.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
+                || entryAssembly.Length > 120
                 || !entryAssembly.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)
                 || !string.Equals(
                     Path.GetFileName(entryAssembly),
@@ -90,7 +92,7 @@ namespace TriLink.PluginHost
                 && (string.IsNullOrWhiteSpace(sha256)
                     || !Regex.IsMatch(
                         sha256,
-                        "^[0-9a-fA-F]{64}$",
+                        @"\A[0-9a-fA-F]{64}\z",
                         RegexOptions.CultureInvariant)))
             {
                 throw new InvalidDataException("Invalid SHA-256 for plugin " + id + ".");

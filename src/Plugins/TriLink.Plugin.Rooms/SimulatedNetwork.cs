@@ -159,6 +159,11 @@ namespace TriLink.Core
                 return OperationResult.Fail("请先创建或加入房间，再邀请附近设备。");
             }
 
+            if (room.Snapshot.Members.Count >= RoomSession.MaxMembers)
+            {
+                return OperationResult.Fail("房间已满（最多 6 人，包含本机）。");
+            }
+
             if (GetRoomForNode(targetNodeId) != null)
             {
                 return OperationResult.Fail("目标节点已经在一个房间中。");
@@ -429,8 +434,10 @@ namespace TriLink.Core
                         LeaderNodeId = targetRoom == null
                             ? null
                             : targetRoom.Snapshot.LeaderNodeId,
-                        CanRequestJoin = localRoom == null && targetRoom != null,
+                        CanRequestJoin = localRoom == null && targetRoom != null
+                            && targetRoom.Snapshot.Members.Count < RoomSession.MaxMembers,
                         CanInvite = localRoom != null
+                            && localRoom.Snapshot.Members.Count < RoomSession.MaxMembers
                             && targetRoom == null
                             && !sameRoom
                             && !hasPendingInvitation,

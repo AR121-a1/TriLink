@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
@@ -18,6 +19,11 @@ namespace TriLink.MinClient
         private readonly IDeviceDiscoveryService _serialWatcher;
         private readonly ISimulationControl _simulation;
         private readonly IPluginCatalog _pluginCatalog;
+        private readonly IModuleManagementService _moduleManager;
+        private readonly IModuleFeatureRegistry _moduleFeatures;
+        private readonly Button _modulesButton = new Button();
+        private ModulesForm _modulesWindow;
+        private readonly List<Form> _backgroundWindows = new List<Form>();
         private readonly string _profileName;
         private readonly NotifyIcon _trayIcon;
         private readonly ComboBox _currentNodeCombo = new ComboBox();
@@ -44,6 +50,10 @@ namespace TriLink.MinClient
 
         private bool _refreshing;
         private bool _exitRequested;
+        private bool _simulationVisible;
+        private bool _searchActive;
+        private readonly Dictionary<string, IReadOnlyList<TriLinkPeer>> _realSearchResults =
+            new Dictionary<string, IReadOnlyList<TriLinkPeer>>(StringComparer.Ordinal);
         private readonly bool _showPluginsOnStart;
 
         public MainForm(
@@ -53,7 +63,9 @@ namespace TriLink.MinClient
             IDeviceDiscoveryService serialWatcher,
             ISimulationControl simulation,
             IPluginCatalog pluginCatalog,
-            string profileName)
+            string profileName,
+            IModuleManagementService moduleManager,
+            IModuleFeatureRegistry moduleFeatures)
         {
             _network = network ?? throw new ArgumentNullException(nameof(network));
             _serialWatcher = serialWatcher
@@ -62,7 +74,10 @@ namespace TriLink.MinClient
             _pluginCatalog = pluginCatalog
                 ?? throw new ArgumentNullException(nameof(pluginCatalog));
             _profileName = string.IsNullOrWhiteSpace(profileName) ? "desktop" : profileName;
+            _moduleManager = moduleManager ?? throw new ArgumentNullException(nameof(moduleManager));
+            _moduleFeatures = moduleFeatures ?? throw new ArgumentNullException(nameof(moduleFeatures));
             _showPluginsOnStart = showPluginsOnStart;
+            _simulationVisible = demoMode;
 
             TraceLifecycle("construct");
             Text = "TriLink 最小客户端";
@@ -89,6 +104,7 @@ namespace TriLink.MinClient
             _trayIcon = CreateTrayIcon();
             BuildLayout();
             BindHandlers();
+            SerialPollingStateChanged(this, EventArgs.Empty);
             foreach (var device in _serialWatcher.Devices)
             {
                 AddOrUpdateSerialDevice(device, false);
@@ -104,6 +120,10 @@ namespace TriLink.MinClient
                 if (demoMode)
                 {
                     Log("三节点模拟已上线。可从电脑 A 创建房间并邀请 B/C。", false);
+                }
+                else
+                {
+                    Log("真实硬件模式：连接 S3 原生 USB 数据口后自动握手；CH340/CH343 仅用于烧录和日志。", false);
                 }
 
                 Log("按 X 隐藏到托盘；双击托盘图标恢复，右键选择“退出”关闭客户端。", false);
@@ -189,6 +209,21 @@ namespace TriLink.MinClient
             Close();
         }
 
+        internal void OpenModules()
+        {
+            if (_modulesWindow == null || _modulesWindow.IsDisposed)
+            {
+                _modulesWindow = new ModulesForm(_moduleManager, _moduleFeatures);
+                _modulesWindow.Show(this);
+            }
+            else
+            {
+                _modulesWindow.Show();
+                _modulesWindow.WindowState = FormWindowState.Normal;
+                _modulesWindow.Activate();
+            }
+        }
+
         private void BuildLayout()
         {
             var root = new TableLayoutPanel
@@ -199,7 +234,7 @@ namespace TriLink.MinClient
                 Padding = new Padding(14),
                 BackColor = BackColor,
             };
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 70F));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 118F));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 145F));
             Controls.Add(root);
@@ -241,13 +276,15 @@ namespace TriLink.MinClient
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 2,
-                RowCount = 1,
+                RowCount = 2,
                 BackColor = Color.White,
                 Padding = new Padding(12, 9, 12, 9),
                 Margin = new Padding(0, 0, 0, 10),
             };
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 132F));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
+            panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
             var actions = new FlowLayoutPanel
             {
@@ -269,7 +306,7 @@ namespace TriLink.MinClient
             _currentNodeCombo.Margin = new Padding(0, 4, 12, 0);
             actions.Controls.Add(_currentNodeCombo);
 
-            ConfigureButton(_simulateButton, "模拟上线", Color.FromArgb(235, 239, 245));
+            ConfigureButton(_simulateButton, "启用模拟", Color.FromArgb(235, 239, 245));
             ConfigureButton(_pollingButton, "启动轮询", Color.FromArgb(235, 239, 245));
             ConfigureButton(_searchButton, "搜索设备", Color.FromArgb(31, 111, 235), Color.White);
             ConfigureButton(_createRoomButton, "创建 Room", Color.FromArgb(30, 142, 90), Color.White);
@@ -282,6 +319,7 @@ namespace TriLink.MinClient
             actions.Controls.Add(_leaveRoomButton);
             actions.Controls.Add(_backgroundButton);
             panel.Controls.Add(actions, 0, 0);
+            panel.SetColumnSpan(actions, 2);
 
             var status = new FlowLayoutPanel
             {
@@ -300,7 +338,11 @@ namespace TriLink.MinClient
             status.Controls.Add(_modeLabel);
             status.Controls.Add(_statusLabel);
             status.Controls.Add(_pluginHealthLabel);
-            panel.Controls.Add(status, 1, 0);
+            panel.Controls.Add(status, 0, 1);
+            ConfigureButton(_modulesButton, "扩展模块…", Color.FromArgb(31, 90, 150), Color.White);
+            _modulesButton.Dock = DockStyle.Fill;
+            _modulesButton.Click += (_, __) => OpenModules();
+            panel.Controls.Add(_modulesButton, 1, 1);
             return panel;
         }
 
@@ -434,9 +476,12 @@ namespace TriLink.MinClient
             };
             _simulateButton.Click += (_, __) =>
             {
-                _simulation.SetAllOnline(true);
-                Log("模拟链路：S3-A、S3-B、S3-C 均已上线。", true);
-                ShowNotice("TriLink 模拟设备已连接", "发现 S3-B 与 S3-C，可搜索、加入或邀请。", false);
+                _simulationVisible = !_simulationVisible;
+                _simulation.SetAllOnline(_simulationVisible);
+                ReloadNodeChoices(_simulationVisible ? "10:00:00:00:00:01" : null);
+                Log(_simulationVisible
+                    ? "已显式启用三节点模拟，仅在本机演示，不代表真实 S3 已连接。"
+                    : "已退出模拟，等待或选择真实 USB 设备。", false);
             };
             _pollingButton.Click += (_, __) =>
             {
@@ -463,7 +508,7 @@ namespace TriLink.MinClient
 
         private void RefreshUi()
         {
-            if (_refreshing || CurrentNode == null)
+            if (_refreshing)
             {
                 return;
             }
@@ -472,20 +517,45 @@ namespace TriLink.MinClient
             try
             {
                 var current = CurrentNode;
+                _simulateButton.Text = _simulationVisible ? "退出模拟" : "启用模拟";
+                if (current == null)
+                {
+                    _modeLabel.Text = "真实硬件模式 · 等待设备";
+                    _statusLabel.Text = "未识别本机设备：请接 S3 原生 USB 数据口（CH340/CH343 仅烧录）。";
+                    _statusLabel.ForeColor = Color.Firebrick;
+                    _searchButton.Enabled = false;
+                    _createRoomButton.Enabled = false;
+                    _leaveRoomButton.Enabled = false;
+                    _nearbyGrid.Rows.Clear();
+                    _membersGrid.Rows.Clear();
+                    _requestsGrid.Rows.Clear();
+                    _invitationsGrid.Rows.Clear();
+                    _roomHeader.Text = "未连接真实设备";
+                    _replicaLabel.Text = "USB 自动识别成功后才能扫描附近设备；Room 当前仅支持模拟演示。";
+                    PopulatePlugins();
+                    return;
+                }
                 var room = _network.GetRoomForNode(current.NodeId);
-                _modeLabel.Text = current.IsSimulated ? "SIMULATION" : "USB CDC";
+                _modeLabel.Text = current.IsSimulated ? "模拟模式 · 仅本机演示" : "真实硬件模式 · USB CDC";
                 _statusLabel.Text = current.IsOnline
-                    ? current.DisplayName + " · 在线"
+                    ? current.DisplayName + " · 在线" + (current.IsSimulated ? "" : " · " + current.PortName)
                     : current.DisplayName + " · 离线";
                 _statusLabel.ForeColor = current.IsOnline
                     ? Color.FromArgb(30, 142, 90)
                     : Color.Firebrick;
 
-                _createRoomButton.Enabled = room == null && current.IsOnline;
-                _leaveRoomButton.Enabled = room != null;
+                _searchButton.Enabled = !_searchActive && current.IsOnline
+                    && (current.IsSimulated || !string.IsNullOrWhiteSpace(current.PortName));
+                _createRoomButton.Enabled = current.IsSimulated && room == null && current.IsOnline;
+                _leaveRoomButton.Enabled = current.IsSimulated && room != null;
                 PopulateNearby(current.NodeId);
                 PopulateRoom(room, current.NodeId);
                 PopulateInvitations(current.NodeId);
+                if (!current.IsSimulated)
+                {
+                    _roomHeader.Text = "真实 Room 尚未接入";
+                    _replicaLabel.Text = "当前支持 USB 身份识别和真实邻居查询；加入、邀请及副本同步仅在模拟模式可用。";
+                }
                 PopulatePlugins();
             }
             finally
@@ -497,8 +567,24 @@ namespace TriLink.MinClient
         private void PopulateNearby(string currentNodeId)
         {
             _nearbyGrid.Rows.Clear();
+            if (CurrentNode != null && !CurrentNode.IsSimulated)
+            {
+                IReadOnlyList<TriLinkPeer> peers;
+                if (_realSearchResults.TryGetValue(currentNodeId, out peers))
+                {
+                    foreach (var peer in peers)
+                    {
+                        _nearbyGrid.Rows.Add(peer.DisplayName, "ESP-NOW", peer.Rssi.ToString(),
+                            string.IsNullOrWhiteSpace(peer.RoomName) ? "—" : peer.RoomName,
+                            string.IsNullOrWhiteSpace(peer.LeaderNodeId) ? "—" : ShortId(peer.LeaderNodeId),
+                            "未接入", "未接入");
+                    }
+                }
+                return;
+            }
             foreach (var item in _network.SearchNearby(currentNodeId))
             {
+                if (!item.Node.IsSimulated) { continue; }
                 var roomText = string.IsNullOrWhiteSpace(item.RoomName)
                     ? "—"
                     : item.RoomName;
@@ -639,17 +725,18 @@ namespace TriLink.MinClient
             _pluginHealthLabel.ForeColor = healthy
                 ? Color.FromArgb(30, 142, 90)
                 : Color.Firebrick;
-            _pluginsTab.Text = "插件 (" + plugins.Count + ")";
+            _pluginsTab.Text = "模块概览 (" + plugins.Count + ")";
         }
 
         private async Task SearchNearbyAsync()
         {
             var current = CurrentNode;
-            if (current == null)
+            if (_searchActive || current == null || !current.IsOnline)
             {
                 return;
             }
 
+            _searchActive = true;
             _searchButton.Enabled = false;
             try
             {
@@ -657,15 +744,10 @@ namespace TriLink.MinClient
                 {
                     Log("正在通过 " + current.PortName + " 请求 S3 搜索结果……", false);
                     var peers = await _serialWatcher.SearchNearbyAsync(current.PortName);
+                    if (!current.IsOnline) { throw new IOException("搜索期间本机设备已断开。"); }
+                    _realSearchResults[current.NodeId] = peers;
                     foreach (var peer in peers)
                     {
-                        _network.AddOrUpdateNode(
-                            new NodeInfo(peer.NodeId, peer.DisplayName, false)
-                            {
-                                IsOnline = true,
-                                Transport = "ESP-NOW",
-                                Rssi = peer.Rssi,
-                            });
                         if (!string.IsNullOrWhiteSpace(peer.RoomId))
                         {
                             Log(
@@ -680,21 +762,27 @@ namespace TriLink.MinClient
 
                     Log("真实搜索完成：" + peers.Count + " 个 peer。", true);
                 }
+                else if (current.IsSimulated && _simulationVisible)
+                {
+                    var count = _network.SearchNearby(current.NodeId).Count(item => item.Node.IsSimulated);
+                    Log("模拟搜索完成：发现 " + count + " 个附近设备。", true);
+                }
                 else
                 {
-                    var count = _network.SearchNearby(current.NodeId).Count;
-                    Log("模拟搜索完成：发现 " + count + " 个附近设备。", true);
+                    Log("尚未连接本机 S3 原生 USB 数据口，未执行搜索。", false);
                 }
 
                 RefreshUi();
             }
             catch (Exception exception)
             {
+                _realSearchResults.Remove(current.NodeId);
                 Log("搜索失败：" + exception.Message, false);
             }
             finally
             {
-                _searchButton.Enabled = true;
+                _searchActive = false;
+                if (!IsDisposed) { RefreshUi(); }
             }
         }
 
@@ -804,6 +892,11 @@ namespace TriLink.MinClient
 
         private void RunOperation(Func<OperationResult> operation)
         {
+            if (CurrentNode == null || !CurrentNode.IsSimulated)
+            {
+                Log("真实 Room 传输尚未接入；本机模拟操作不会发送到其他电脑。", false);
+                return;
+            }
             try
             {
                 var result = operation();
@@ -856,6 +949,7 @@ namespace TriLink.MinClient
 
         private void AddOrUpdateSerialDevice(TriLinkDevice device, bool notify)
         {
+            _simulationVisible = false;
             _network.AddOrUpdateNode(
                 new NodeInfo(device.NodeId, device.DisplayName, false)
                 {
@@ -892,6 +986,7 @@ namespace TriLink.MinClient
 
             try
             {
+                _realSearchResults.Remove(e.Device.NodeId);
                 _network.SetNodeOnline(e.Device.NodeId, false);
             }
             catch (ArgumentException)
@@ -958,6 +1053,11 @@ namespace TriLink.MinClient
                 _currentNodeCombo.Items.Clear();
                 foreach (var node in _network.Nodes)
                 {
+                    if (_simulationVisible ? !node.IsSimulated
+                        : node.IsSimulated || string.IsNullOrWhiteSpace(node.PortName))
+                    {
+                        continue;
+                    }
                     _currentNodeCombo.Items.Add(new NodeChoice(node));
                 }
 
@@ -1028,6 +1128,14 @@ namespace TriLink.MinClient
         private void EnterBackgroundMode()
         {
             Log("已按用户操作驻留后台；再次启动客户端或双击托盘图标可恢复。", false);
+            if (Visible)
+            {
+                _backgroundWindows.Clear();
+                RememberVisibleOwnedWindows(this);
+                // WinForms Hide does not change owned forms' Visible state; hide the whole UI tree explicitly.
+                for (var index = _backgroundWindows.Count - 1; index >= 0; index--)
+                { _backgroundWindows[index].Hide(); }
+            }
             Hide();
             _trayIcon.ShowBalloonTip(
                 2500,
@@ -1047,8 +1155,20 @@ namespace TriLink.MinClient
             Show();
             WindowState = FormWindowState.Normal;
             ShowInTaskbar = true;
+            foreach (var window in _backgroundWindows)
+            { if (!window.IsDisposed) { window.Show(); } }
+            _backgroundWindows.Clear();
             BringToFront();
             Activate();
+        }
+
+        private void RememberVisibleOwnedWindows(Form owner)
+        {
+            foreach (var window in owner.OwnedForms)
+            {
+                if (window.Visible) { _backgroundWindows.Add(window); }
+                RememberVisibleOwnedWindows(window);
+            }
         }
 
         private void Log(string message, bool success)
@@ -1148,6 +1268,12 @@ namespace TriLink.MinClient
             button.BackColor = backColor;
             button.ForeColor = foreColor ?? Color.FromArgb(35, 43, 54);
             button.UseVisualStyleBackColor = false;
+            button.EnabledChanged += (_, __) =>
+            {
+                button.BackColor = button.Enabled ? backColor : Color.FromArgb(235, 239, 245);
+                button.ForeColor = button.Enabled
+                    ? foreColor ?? Color.FromArgb(35, 43, 54) : Color.Gray;
+            };
         }
 
         private static string ShortId(string nodeId)

@@ -12,7 +12,8 @@ $requiredFiles = @(
     'TriLink.Plugin.Abstractions.dll',
     'TriLink.PluginHost.dll',
     '启动 TriLink（三节点演示）.lnk',
-    '启动 TriLink（真实硬件）.lnk'
+    '启动 TriLink（真实硬件）.lnk',
+    '启动 TriLink（安全恢复）.lnk'
 )
 $requiredDirectories = @('plugins', 'profiles')
 
@@ -27,7 +28,7 @@ foreach ($name in $requiredDirectories) {
     }
 }
 foreach ($entry in Get-ChildItem -LiteralPath $runtime -Force) {
-    $allowed = if ($entry.PSIsContainer) { $requiredDirectories } else { $requiredFiles }
+    $allowed = if ($entry.PSIsContainer) { $requiredDirectories + @('module-data') } else { $requiredFiles }
     if ($entry.Name -notin $allowed) {
         throw "Non-runtime entry in client directory; archive it before delivery: $($entry.FullName)"
     }

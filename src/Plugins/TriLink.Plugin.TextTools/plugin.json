@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "trilink.text-tools",
+  "displayName": "文本数据工具（可选）",
+  "version": "1.0.0",
+  "hostApi": "1.0",
+  "enabled": true,
+  "entryAssembly": "TriLink.Plugin.TextTools.dll",
+  "entryType": "TriLink.Plugins.TextTools.TextToolsPlugin",
+  "dependencies": [],
+  "requiresServices": ["trilink.module-features"],
+  "providesServices": [],
+  "capabilities": ["local-text-inspection", "utf8-size", "sha256", "base64", "on-demand-ui"]
+}
