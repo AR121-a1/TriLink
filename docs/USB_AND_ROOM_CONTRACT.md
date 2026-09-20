@@ -1,8 +1,8 @@
 # TriLink USB 与 Room 最小契约
 
-状态（2026-09-16）：TRILINK/1 识别/发现已对接真实固件；Room 状态机仍是本机模拟后端。
-Room 插件 1.1.0 上限为 6 人（包含本机），在加入请求、邀请、批准和搜索操作可用性中检查。
-固件 v0.8 的 TRILINK/3 / ROUTE format 2 是自动选路传输夹具，不是本页建议的 Room 管理协议；真实跨电脑 Room 与三板验收未完成。
+状态（2026-09-17）：TRILINK/1 识别/发现保持兼容；新增 `trilink.hardware-room` 使用固件 v0.9.0 的 TRILINK/3 ROOM/ROOMGET/RGBENABLE/RGB/RGBRESULT，能力位0x40。当前132 B Room编码、S3副本与使用边界见 [真实 Room / RGB](REAL_ROOM_RGB.md)；三板验收未完成。
+
+下文识别/发现部分仍有效；后面的 Room 消息建议是早期规划，不是 v0.9 的实际 JSON/ASCII 消息格式。原 `trilink.rooms` 1.1.0 仍是独立六成员模拟后端，不承担硬件同步。
 
 ## 1. 层次边界
 

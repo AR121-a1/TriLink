@@ -553,8 +553,8 @@ namespace TriLink.MinClient
                 PopulateInvitations(current.NodeId);
                 if (!current.IsSimulated)
                 {
-                    _roomHeader.Text = "真实 Room 尚未接入";
-                    _replicaLabel.Text = "当前支持 USB 身份识别和真实邻居查询；加入、邀请及副本同步仅在模拟模式可用。";
+                    _roomHeader.Text = "真实 Room / RGB → 扩展模块";
+                    _replicaLabel.Text = "请在扩展模块中打开「真实 Room / RGB」；需配套新版固件。本页房间按钮仅用于模拟演示。";
                 }
                 PopulatePlugins();
             }
@@ -894,7 +894,7 @@ namespace TriLink.MinClient
         {
             if (CurrentNode == null || !CurrentNode.IsSimulated)
             {
-                Log("真实 Room 传输尚未接入；本机模拟操作不会发送到其他电脑。", false);
+                Log("请在扩展模块中打开「真实 Room / RGB」操作设备；本页模拟操作不会发送到其他电脑。", false);
                 return;
             }
             try

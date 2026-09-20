@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "trilink.serial",
   "displayName": "USB CDC 设备发现",
-  "version": "1.0.1",
+  "version": "1.2.0",
   "hostApi": "1.0",
   "enabled": true,
   "entryAssembly": "TriLink.Plugin.Serial.dll",
   "entryType": "TriLink.Plugins.Serial.SerialPlugin",
   "dependencies": [],
   "requiresServices": [],
-  "providesServices": ["trilink.device-discovery"],
+  "providesServices": ["trilink.device-discovery", "trilink.hardware-commands"],
   "capabilities": ["usb-cdc", "device-discovery", "serial-search", "polling-circuit-breaker"]
 }

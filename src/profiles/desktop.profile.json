@@ -7,6 +7,7 @@
     "trilink.simulation",
     "trilink.desktop",
     "trilink.modules",
-    "trilink.text-tools"
+    "trilink.text-tools",
+    "trilink.hardware-room"
   ]
 }

@@ -10,12 +10,14 @@ using TriLink.Core;
 
 namespace TriLink.MinClient.Serial
 {
-    internal sealed class TriLinkSerialWatcher : IDeviceDiscoveryService
+    internal sealed class TriLinkSerialWatcher : IDeviceDiscoveryService, IHardwareCommandService
     {
         private const int DefaultConsecutiveFailureLimit = 5;
         private static readonly TimeSpan PollingInterval = TimeSpan.FromSeconds(3);
 
         private readonly object _sync = new object();
+        private readonly SemaphoreSlim _ioOwner = new SemaphoreSlim(1, 1);
+        private long _nextIoTick;
         private readonly Dictionary<string, TriLinkDevice> _recognized =
             new Dictionary<string, TriLinkDevice>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _manualPorts;
@@ -148,8 +150,9 @@ namespace TriLink.MinClient.Serial
                 {
                     try
                     {
-                        ScanCore();
-                        HandleScanSuccess();
+                        if (!_ioOwner.Wait(0)) { return; }
+                        try { ScanCore(); HandleScanSuccess(); }
+                        finally { _ioOwner.Release(); }
                     }
                     catch (Exception exception)
                     {
@@ -168,15 +171,100 @@ namespace TriLink.MinClient.Serial
             return Task.Run<IReadOnlyList<TriLinkPeer>>(
                 () =>
                 {
+                    if (!_ioOwner.Wait(1500)) { throw new TimeoutException("USB 通道忙，请稍后重试。"); }
+                    try
+                    {
+                    ThrowIfDisposed();
                     using (var port = OpenPort(portName, 900))
                     {
                         var nonce = Guid.NewGuid().ToString("N").Substring(0, 8);
                         port.WriteLine(UsbControlProtocol.EncodeSearch(nonce));
                         var elapsed = Stopwatch.StartNew();
                         return ReadSearchResponse(
-                            () => port.ReadLine().Trim(), nonce, () => elapsed.ElapsedMilliseconds < 1200);
+                            () => ReadBoundedLine(port), nonce, () => elapsed.ElapsedMilliseconds < 1200);
                     }
+                    }
+                    finally { _ioOwner.Release(); }
                 });
+        }
+
+        public Task<string> ExecuteAsync(string portName, string command, string arguments)
+        {
+            // No arbitrary serial scripts/configuration through this application service.
+            var allowed = new[] { "ROOM", "ROOMGET", "RGB", "RGBENABLE", "RGBRESULT" };
+            if (!allowed.Contains(command) || arguments == null || arguments.Any(c => c < 32 || c > 126)
+                || arguments.Length > 300) { throw new ArgumentException("非法或超长业务命令。"); }
+            return Task.Run(() =>
+            {
+                if (!_ioOwner.Wait(1500)) { throw new TimeoutException("USB 通道忙，请稍后重试。"); }
+                try
+                {
+                    ThrowIfDisposed();
+                    TriLinkDevice expected;
+                    lock (_sync)
+                    {
+                        if (!_recognized.TryGetValue(portName, out expected) || (expected.Capabilities & 64) == 0)
+                            throw new InvalidOperationException("请选择已识别且支持真实 Room/RGB 的新版 S3。");
+                        expected = CloneDevice(expected);
+                    }
+                    // Includes fresh HELLO plus one command: at most ~13 lines/s across all ports.
+                    long delay = _nextIoTick - Stopwatch.GetTimestamp();
+                    if (delay > 0) { Thread.Sleep((int)Math.Min(150, delay * 1000 / Stopwatch.Frequency + 1)); }
+                    _nextIoTick = Stopwatch.GetTimestamp() + Stopwatch.Frequency * 150 / 1000;
+                    using (var port = OpenPort(portName, 150))
+                    {
+                        var nonce = Guid.NewGuid().ToString("N").Substring(0, 8);
+                        port.WriteLine(UsbControlProtocol.EncodeHello(nonce));
+                        var elapsed = Stopwatch.StartNew();
+                        bool identified = false;
+                        while (elapsed.ElapsedMilliseconds < 1000)
+                        {
+                            string line; try { line = ReadBoundedLine(port); } catch (TimeoutException) { continue; }
+                            UsbDeviceIdentity identity;
+                            if (UsbControlProtocol.TryParseDevice(line, nonce, out identity))
+                            {
+                                if (identity.NodeId != expected.NodeId || (identity.Capabilities & 64) == 0)
+                                    throw new InvalidOperationException("端口设备身份或能力已改变，请重新扫描。");
+                                identified = true; break;
+                            }
+                        }
+                        if (!identified) { throw new TimeoutException("发送业务前的身份复核超时。"); }
+                        nonce = Guid.NewGuid().ToString("N").Substring(0, 8);
+                        port.WriteLine("TRILINK/3 " + command + " " + nonce
+                            + (arguments.Length == 0 ? "" : " " + arguments));
+                        elapsed.Restart();
+                        while (elapsed.ElapsedMilliseconds < 1800)
+                        {
+                            string line; try { line = ReadBoundedLine(port); } catch (TimeoutException) { continue; }
+                            var fields = line.Split(' ');
+                            if (fields.Length >= 3 && fields[0] == "TRILINK/3" && fields[2] == nonce)
+                            {
+                                if (fields[1] == "ERROR") throw new InvalidOperationException(
+                                    "设备拒绝操作：请检查角色、成员同步状态、容量和是否有在途任务。");
+                                return line;
+                            }
+                        }
+                        throw new TimeoutException("业务回复超时，结果未知；先刷新状态，不自动重放操作。");
+                    }
+                }
+                finally { _ioOwner.Release(); }
+            });
+        }
+
+        private static string ReadBoundedLine(SerialPort port)
+        {
+            var line = new StringBuilder(128);
+            var elapsed = Stopwatch.StartNew();
+            while (elapsed.ElapsedMilliseconds < 1000)
+            {
+                int next;
+                try { next = port.ReadChar(); }
+                catch (TimeoutException) { continue; } // Preserve partial lines within this bounded read.
+                if (next == '\n') return line.ToString().Trim();
+                if (line.Length >= 511) throw new System.IO.InvalidDataException("USB 回复超过 511 字符上限。");
+                line.Append((char)next);
+            }
+            throw new TimeoutException("USB 半行回复超时。");
         }
 
         internal static IReadOnlyList<TriLinkPeer> ReadSearchResponse(
@@ -398,7 +486,7 @@ namespace TriLink.MinClient.Serial
                         string line;
                         try
                         {
-                            line = port.ReadLine().Trim();
+                            line = ReadBoundedLine(port);
                         }
                         catch (TimeoutException)
                         {

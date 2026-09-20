@@ -1,6 +1,6 @@
 # TriLink v0.14 本地版架构
 
-扩展状态：可扩展。当前是一个 Windows 进程、一个插件宿主和六个首方 DLL。界面与业务通过服务契约通信，没有额外本机 HTTP 后端或独立托盘进程。当前实际运行范围为单机模拟、串口控制入口与本地模块管理，ESP32 固件不包含在此仓库。
+扩展状态：可扩展。当前是一个 Windows 进程、一个插件宿主和七个首方 DLL。界面与业务通过服务契约通信，没有额外本机 HTTP 后端或独立托盘进程。真实 Room / RGB 已通过独立模块接入 S3，模拟仍隔离保留；ESP32 固件不包含在此仓库，真机联调待验收。
 
 ## 实际组成
 
@@ -18,9 +18,10 @@ TriLink.PluginHost + TriLink.Plugin.Abstractions
         +-- trilink.desktop     IDesktopShell（WinForms 与 NotifyIcon）
         +-- trilink.modules     IModuleManagementService + IModuleFeatureRegistry
         +-- trilink.text-tools  按需文本功能窗口（可选模块）
+        +-- trilink.hardware-room 按需真实 Room / RGB（消费共享串口命令服务）
 ```
 
-数据不经过公司服务器。此处的“无服务器”描述单机演示没有网络服务依赖，不代表已实现真实三机无线传输或公网直连。
+无商业服务器依赖。真实模块通过 `IHardwareCommandService` 访问本机 S3，发现/搜索/命令共用串口锁；Room 的易失副本由 S3 持有，RGB 经成员自动路由。没有公网直连、持久化共识或自动故障选举；详见 [新模块链路与边界](REAL_ROOM_RGB.md)。
 
 ## 代码所有权
 

@@ -190,7 +190,7 @@ internal static class Program
                 fake.Arrive(device);
                 Require(choices.Items.Count == 1 && search.Enabled
                     && !Field<Button>(form, "_createRoomButton").Enabled,
-                    "recognized local device enables real search but not unimplemented real Room");
+                    "recognized local device enables real search; hardware Room uses its own module");
                 fake.Peers = new[] { new TriLinkPeer { NodeId = "80:B5:4E:00:00:02", DisplayName = "TEST REMOTE", Rssi = -42 } };
                 search.PerformClick();
                 Require(fake.SearchCalls == 1 && nearby.Rows.Count == 1 && choices.Items.Count == 1,

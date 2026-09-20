@@ -10,6 +10,7 @@ param(
         'trilink.simulation',
         'trilink.modules',
         'trilink.text-tools',
+        'trilink.hardware-room',
         'trilink.desktop')]
     [string]$PluginId = 'all'
 )
@@ -200,6 +201,13 @@ function Compile-TextToolsPlugin {
         @($abstractions, (Join-Path $framework 'System.Windows.Forms.dll'), (Join-Path $framework 'System.Drawing.dll'))
 }
 
+function Compile-HardwareRoomPlugin {
+    $sourceDirectory = Join-Path $projectRoot 'src\Plugins\TriLink.Plugin.HardwareRoom'
+    Deploy-Plugin 'trilink.hardware-room' 'TriLink.Plugin.HardwareRoom.dll' $sourceDirectory `
+        (Get-SourceFiles $sourceDirectory) `
+        @($abstractions, (Join-Path $framework 'System.Drawing.dll'), (Join-Path $framework 'System.Windows.Forms.dll'))
+}
+
 function Invoke-PluginSelection([string]$Id) {
     switch ($Id) {
         'trilink.rooms' { Compile-RoomsPlugin }
@@ -208,6 +216,7 @@ function Invoke-PluginSelection([string]$Id) {
         'trilink.desktop' { Compile-DesktopPlugin }
         'trilink.modules' { Compile-ModulesPlugin }
         'trilink.text-tools' { Compile-TextToolsPlugin }
+        'trilink.hardware-room' { Compile-HardwareRoomPlugin }
         default { throw "Unknown plugin id: $Id" }
     }
 }
@@ -289,6 +298,17 @@ function Invoke-CoreTests {
     if ($LASTEXITCODE -ne 0) { throw "Core tests failed with exit code $LASTEXITCODE" }
 }
 
+function Invoke-HardwareRoomTests {
+    $tests = Join-Path $testOutput 'TriLink.HardwareRoom.Tests.exe'
+    $assembly = Join-Path $pluginOutput 'trilink.hardware-room\TriLink.Plugin.HardwareRoom.dll'
+    Invoke-Compile 'TriLink.HardwareRoom.Tests' 'exe' $tests `
+        (Get-SourceFiles (Join-Path $projectRoot 'tests\TriLink.HardwareRoom.Tests')) `
+        @($abstractions, $assembly, (Join-Path $framework 'System.Windows.Forms.dll'), (Join-Path $framework 'System.Drawing.dll'))
+    foreach ($dependency in @($abstractions, $assembly)) { Copy-Item -LiteralPath $dependency -Destination $testOutput -Force }
+    & $tests (Join-Path $uiOutput 'ui-hardware-room-fixture.png') | Tee-Object -FilePath (Join-Path $logOutput 'hardware-room-tests.log')
+    if ($LASTEXITCODE -ne 0) { throw "Hardware Room tests failed with exit code $LASTEXITCODE" }
+}
+
 function Invoke-ModuleTests {
     Invoke-Compile 'TriLink.ModuleProbe' 'exe' (Join-Path $testOutput 'TriLink.ModuleProbe.exe') `
         (Get-SourceFiles (Join-Path $projectRoot 'tests\TriLink.ModuleProbe')) `
@@ -318,6 +338,7 @@ if ($PluginId -ne 'all') {
 
     Invoke-PluginSelection $PluginId
     if ($PluginId -in @('trilink.serial', 'trilink.rooms')) { Invoke-CoreTests }
+    if ($PluginId -eq 'trilink.hardware-room') { Invoke-HardwareRoomTests }
     Invoke-PluginValidation
     Invoke-UiSmoke 'ui-plugin-update-smoke.png' @('--plugins-view')
     if ($PluginId -in @('trilink.desktop', 'trilink.modules', 'trilink.text-tools')) {
@@ -336,6 +357,7 @@ Compile-SerialPlugin
 Compile-SimulationPlugin
 Compile-ModulesPlugin
 Compile-TextToolsPlugin
+Compile-HardwareRoomPlugin
 Compile-DesktopPlugin
 Copy-Item -LiteralPath (Join-Path $projectRoot 'src\profiles\desktop.profile.json') `
     -Destination (Join-Path $profileOutput 'desktop.profile.json') `
@@ -353,6 +375,7 @@ Invoke-Compile `
     )
 
 Invoke-CoreTests
+Invoke-HardwareRoomTests
 Invoke-ModuleTests
 
 Invoke-PluginValidation

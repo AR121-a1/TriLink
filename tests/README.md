@@ -8,6 +8,9 @@
 | `TriLink.Desktop.Tests/` | X 隐藏、托盘打开、托盘退出、关机事件放行 |
 | `TriLink.Modules.Tests/` | 包导入、启停持久化、恢复、依赖、容量、完整性、功能与管理窗口 |
 | `TriLink.ModuleProbe/` | 全新进程验证有效启用集合与实际程序集加载位置 |
+| `TriLink.HardwareRoom.Tests/` | Room wire/UTF-8、能力筛选、受控查询、5次熔断、关闭取消批次、fake USB UI 渲染 |
+
+2026-09-17：新增真实 Room 模块软件测试（服务为 fake，不打开真实 COM）；完整构建与 `-PluginId trilink.hardware-room` 均会运行。对应截图为 `ui-hardware-room-fixture.png`，不得标注为真实设备截图。
 
 2026-09-16：核心共 136 项，包含六成员上限、排队批准防超额、空位重试、副本/继承，以及在线候选端口筛选、手动端口边界、搜索 END/超时判定；
 桌面测试增加普通模式空设备、模拟显式启停、真实列表隔离/清空、断开、暂停/恢复及工具栏布局。

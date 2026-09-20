@@ -34,12 +34,24 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TriLink.Modules.Tests", "te
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TriLink.ModuleProbe", "tests\TriLink.ModuleProbe\TriLink.ModuleProbe.csproj", "{B4F84C8E-6221-4CC0-A26F-6B709B012011}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TriLink.Plugin.HardwareRoom", "src\Plugins\TriLink.Plugin.HardwareRoom\TriLink.Plugin.HardwareRoom.csproj", "{B4F84C8E-6221-4CC0-A26F-6B709B012012}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TriLink.HardwareRoom.Tests", "tests\TriLink.HardwareRoom.Tests\TriLink.HardwareRoom.Tests.csproj", "{B4F84C8E-6221-4CC0-A26F-6B709B012013}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B4F84C8E-6221-4CC0-A26F-6B709B012013}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B4F84C8E-6221-4CC0-A26F-6B709B012013}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B4F84C8E-6221-4CC0-A26F-6B709B012013}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B4F84C8E-6221-4CC0-A26F-6B709B012013}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B4F84C8E-6221-4CC0-A26F-6B709B012012}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B4F84C8E-6221-4CC0-A26F-6B709B012012}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B4F84C8E-6221-4CC0-A26F-6B709B012012}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B4F84C8E-6221-4CC0-A26F-6B709B012012}.Release|Any CPU.Build.0 = Release|Any CPU
 		{B4F84C8E-6221-4CC0-A26F-6B709B012008}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{B4F84C8E-6221-4CC0-A26F-6B709B012008}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B4F84C8E-6221-4CC0-A26F-6B709B012008}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -94,6 +106,8 @@ Global
 		{B4F84C8E-6221-4CC0-A26F-6B709B012007}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
+		{B4F84C8E-6221-4CC0-A26F-6B709B012013} = {B4F84C8E-6221-4CC0-A26F-6B709B012103}
+		{B4F84C8E-6221-4CC0-A26F-6B709B012012} = {B4F84C8E-6221-4CC0-A26F-6B709B012102}
 		{B4F84C8E-6221-4CC0-A26F-6B709B012008} = {B4F84C8E-6221-4CC0-A26F-6B709B012102}
 		{B4F84C8E-6221-4CC0-A26F-6B709B012009} = {B4F84C8E-6221-4CC0-A26F-6B709B012102}
 		{B4F84C8E-6221-4CC0-A26F-6B709B012010} = {B4F84C8E-6221-4CC0-A26F-6B709B012103}

@@ -13,6 +13,7 @@ namespace TriLink.Plugins.Serial
             _watcher = new TriLinkSerialWatcher();
             context.Defer(() => _watcher.Dispose());
             context.Provide<IDeviceDiscoveryService>(_watcher);
+            context.Provide<IHardwareCommandService>(_watcher);
             context.Log("USB CDC 发现与受控轮询服务已注册。");
         }
 

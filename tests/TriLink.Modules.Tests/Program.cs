@@ -32,7 +32,7 @@ internal static class Program
             var store = new ModuleStore(environment);
             var baseline = store.ReadSelection(false);
             store.Validate(baseline);
-            Check(baseline.enabled.Length == 6, "six built-in modules in baseline");
+            Check(baseline.enabled.Length == 7, "seven built-in modules in baseline");
             var catalog = new Catalog { Plugins = store.Resolve(baseline).Select(m => new PluginDescriptor {
                 Id = m.id, DisplayName = m.displayName, Version = m.version, State = PluginState.Active,
                 SourceDirectory = m.SourceDirectory }).ToList() };
@@ -127,7 +127,7 @@ internal static class Program
             File.WriteAllText(selectionFile, "{ broken");
             Reject(() => store.ReadSelection(false), "corrupt configuration fails closed");
             var safe = new ModuleManagementService(store, catalog, true);
-            Check(safe.GetSnapshot().SafeMode && safe.GetSnapshot().Modules.Count == 6, "safe mode ignores corrupt overlay");
+            Check(safe.GetSnapshot().SafeMode && safe.GetSnapshot().Modules.Count == 7, "safe mode ignores corrupt overlay");
             Probe(root, "trilink.text-tools", true, false, true);
             Reject(() => safe.SetEnabled("trilink.text-tools", false), "safe mode only permits recovery");
             safe.RestoreBuiltIns();
@@ -176,7 +176,7 @@ internal static class Program
         {
             form.Show(); Application.DoEvents();
             var grid = Field<DataGridView>(form, "_grid");
-            Check(grid.Rows.Count == 6, "management window lists all six modules");
+            Check(grid.Rows.Count == 7, "management window lists all seven modules");
             Select(grid, "trilink.desktop");
             Check(!Field<Button>(form, "_toggle").Enabled, "UI prevents disabling foundation module");
             Select(grid, "trilink.text-tools");
