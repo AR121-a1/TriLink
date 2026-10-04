@@ -60,6 +60,18 @@ $logOutput = Join-Path $testRoot 'logs'
 $stagingOutput = Join-Path $projectRoot "artifacts\build\$Configuration\plugins"
 $symbolOutput = Join-Path $projectRoot "artifacts\build\$Configuration\symbols"
 
+$runtimeClientPath = [System.IO.Path]::GetFullPath((Join-Path $output 'TriLink.MinClient.exe'))
+foreach ($runningClient in @(Get-Process -Name 'TriLink.MinClient' -ErrorAction SilentlyContinue)) {
+    $runningClientPath = $runningClient.Path
+    if (-not [string]::IsNullOrWhiteSpace($runningClientPath) -and
+        [string]::Equals(
+            [System.IO.Path]::GetFullPath($runningClientPath),
+            $runtimeClientPath,
+            [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "当前 $Configuration 客户端仍在运行（PID $($runningClient.Id)）。请先从托盘菜单退出客户端，再重新构建；关闭窗口不会退出程序。"
+    }
+}
+
 Write-Host "TOOLCHAIN compiler=$csc"
 Write-Host "TOOLCHAIN framework=$framework"
 

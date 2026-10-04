@@ -44,7 +44,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\build.ps1
 - `启动 TriLink（真实硬件）.lnk`：等待原生 USB 数据口连接的 S3。
 - `启动 TriLink（安全恢复）.lnk`：模块配置损坏时忽略自定义配置并恢复内置模块。
 
-关闭窗口会驻留托盘。重新编译前从托盘菜单“退出”，释放正在使用的 DLL。
+关闭窗口会驻留托盘。重新编译前从托盘菜单“退出”，释放正在使用的 DLL。构建脚本在写入前检查目标目录的客户端进程；仍在运行时会停止构建并提示退出，避免编译器替换共享 DLL 后留下不完整目录。运行其他配置目录的客户端不阻塞当前目录构建。
 
 真实 Room 操作入口是“扩展模块…”中的“真实 Room / RGB”。主窗口的房间按钮用于模拟演示。客户端仓库不包含配套固件；当前真实模块对应本地固件 0.10.2，真实三板验收仍待完成。连接、能力位和 RGB 启用要求见 [真实 Room / RGB](REAL_ROOM_RGB.md)。无需硬件即可开发客户端并运行软件回归。
 
@@ -67,6 +67,8 @@ Debug 构建关闭优化，并把 portable PDB 保存到 `artifacts\build\Debug\
 本机 `src/TriLink.MinClient/TriLink.MinClient.csproj.user` 已配置 F5 启动对应 `artifacts/Debug` 或 `artifacts/Release` 的完整客户端，参数为 `--demo`。这个文件被 Git 忽略，只影响本机。新电脑可以在启动项目的调试属性中设置同样的外部程序路径，或使用“附加到进程”。需要硬件模式时将启动参数留空。
 
 **每次修改后都先执行构建脚本，再 F5。** Visual Studio/.NET SDK 的普通生成只把程序集放入各项目的 `bin/`，不会部署运行所需的 profile、插件清单和哈希。
+
+若 F5 因缺少 `TriLink.Plugin.Abstractions.dll` 而无法启动，先退出正在使用同一运行目录的客户端，再执行一次完整 Debug 构建恢复配套文件；`--safe-mode` 不能补齐缺失的程序集。不要单独运行 `bin/Debug/net48` 下的 EXE。
 
 检查 IDE 的项目编译是否正常：
 
