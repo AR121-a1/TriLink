@@ -82,6 +82,8 @@ context.Defer(lease.Dispose);
 
 开发内置模块可运行 `tools/build.ps1 -PluginId trilink.text-tools`，开发构建覆盖内置包，须先退出客户端。GUI 导入是另一条不覆盖内置文件的更新路径；若已导入同 ID 包，正常启动优先使用导入版本，要测试重编的内置包应先恢复内置或使用安全模式。
 
+2026-10-01起，构建脚本的UI smoke和桌面生命周期回归自动固定`desktop + --safe-mode`，直接验证内置组合，既不删除导入包也不恢复/覆盖用户配置。同ID导入覆盖、损坏配置和构建参数的独立回归位于`tools/test-built-in-smoke.ps1`；普通启动仍按用户组合工作，两种验收不能混为一谈。
+
 ## 验证
 
 完整回归入口 `tools/build.ps1`；模块测试位于 `tests/TriLink.Modules.Tests/`，独立进程加载探针位于 `tests/TriLink.ModuleProbe/`。夹具只写 `artifacts/tests/`，不修改 Release 模块配置。覆盖启停、取消、更新、缺依赖、坏哈希、不安全路径、容量、源文件变化、安全恢复、功能懒加载 / 清理、正常 / 空 / 错误 / 待重启界面。

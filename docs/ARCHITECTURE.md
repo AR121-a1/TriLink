@@ -1,5 +1,11 @@
 # TriLink v0.14 本地版架构
 
+2026-10-01 review修复：serial1.2.1内部以ISerialIo/ISerialConnection封装OS枚举与端口，公开服务保持不变。每次恢复创建取消轮次并复核缓存，周期扫描复用未变化身份；共享USB所有者仍为单通道。内置构建验证固定desktop+safe-mode，真实用户选择独立保留。S3 v0.10.2在原准入状态机保存本地成员版本下限，不改变空口体/任务/缓存。当前证据见 [review修复](REVIEW_FIXES_20261001.md)。
+
+2026-10-01 前一轮：hardware-room0.2.1读取本机RGB故障和退出公告状态；固件0.10.1保留10秒退出公告，并收束RMT等待/故障资源生命周期。Room空口opcode2、Host API1.0、产品0.14.0-local及七插件不变。历史证据见 [故障收束](CLOSURE_20261001.md)。
+
+2026-09-22：hardware-room0.2.0只增加状态展示和人工确认重试；OFFER/CONFIRM、票据、截止时间由S3执行，PC不承担新的一致性状态机。Room空口opcode2与旧版隔离；协议边界、未知结果和验收状态见 [阶段收束](CLOSURE_20260922.md)。
+
 扩展状态：可扩展。当前是一个 Windows 进程、一个插件宿主和七个首方 DLL。界面与业务通过服务契约通信，没有额外本机 HTTP 后端或独立托盘进程。真实 Room / RGB 已通过独立模块接入 S3，模拟仍隔离保留；ESP32 固件不包含在此仓库，真机联调待验收。
 
 ## 实际组成
@@ -31,13 +37,14 @@ TriLink.PluginHost + TriLink.Plugin.Abstractions
 | 宿主 | `src/TriLink.PluginHost/` | profile、manifest、服务、依赖与资源回收 |
 | 契约 | `src/TriLink.Plugin.Abstractions/` | Host API、DTO、插件接口和窗口恢复消息 |
 | 房间插件 | `src/Plugins/TriLink.Plugin.Rooms/` | 房间命令、权限、模拟网络与副本对象 |
-| 串口插件 | `src/Plugins/TriLink.Plugin.Serial/` | 端口发现、USB 文本解析、握手与轮询策略 |
+| 串口插件 | `src/Plugins/TriLink.Plugin.Serial/` | 端口发现、USB文本解析、握手、轮询策略与共享业务命令 |
 | 演示插件 | `src/Plugins/TriLink.Plugin.Simulation/` | 注入模拟节点、控制模拟在线状态 |
 | 桌面插件 | `src/Plugins/TriLink.Plugin.Desktop/` | 展示节点与房间、提交命令、托盘通知 |
 | 扩展管理插件 | `src/Plugins/TriLink.Plugin.Modules/` | 模块管理服务、按需功能注册表 |
 | 可选文本插件 | `src/Plugins/TriLink.Plugin.TextTools/` | 本地文本检查，独立功能窗口 |
+| 真实Room插件 | `src/Plugins/TriLink.Plugin.HardwareRoom/` | 本机S3状态显示、真实管理命令、RGB回执与故障/退出公告提示 |
 
-文件已按所属组件归位；部分命名空间保留历史名称 `TriLink.Core` / `TriLink.MinClient`，不等于仍在跨目录编译。契约程序集与插件有各自版本；本地产品 `0.14.0` 保持 Host API `1.0` 的旧接口，加法扩展以服务声明进行能力约束。
+文件已按所属组件归位；部分命名空间保留历史名称 `TriLink.Core` / `TriLink.MinClient`，不等于仍在跨目录编译。契约程序集与插件有各自版本；本地产品`0.14.0-local`保持Host API `1.0`的旧接口，加法扩展以服务声明进行能力约束。
 
 ## 服务与依赖
 
@@ -45,9 +52,12 @@ TriLink.PluginHost + TriLink.Plugin.Abstractions
 | --- | --- | --- |
 | `IPluginCatalog` | 宿主 | 桌面 |
 | `IRoomNetwork` | 房间 | 演示、桌面 |
-| `IDeviceDiscoveryService` | 串口 | 桌面 |
+| `IDeviceDiscoveryService` | 串口 | 桌面、真实Room |
+| `IHardwareCommandService` | 串口 | 真实Room |
 | `ISimulationControl` | 演示 | 桌面 |
 | `IDesktopShell` | 桌面 | 应用入口 |
+| `IModuleManagementService` | 扩展管理 | 桌面 |
+| `IModuleFeatureRegistry` | 扩展管理 | 桌面、文本工具、真实Room |
 
 消费者在 manifest 中声明 `requiresServices`，提供者声明 `providesServices`。宿主拒绝重复提供者、缺失服务、循环依赖和未声明访问。`context.Defer()` 登记清理动作；配置失败或退出时逆序回收，消费者先于提供者停止。
 
@@ -59,9 +69,15 @@ TriLink.PluginHost + TriLink.Plugin.Abstractions
 
 **设备发现：** 启动或设备到达事件 -> 受控扫描 -> 筛选候选端口 -> HELLO/DEVICE nonce 校验 -> DeviceArrived -> 加入 UI 的节点列表并通知。
 
-**邻居搜索：** 用户点击搜索 -> 串口发送 SEARCH -> 解析 PEER/END -> 更新邻居列表。来自远端的房间元数据目前记录日志；房间按钮仍调用本地房间服务，没有发送远端 JOIN/INVITE 消息。
+**邻居搜索：** 用户点击搜索 -> 串口发送SEARCH -> 解析PEER/END -> 更新邻居列表。主窗口房间按钮保留模拟入口；真实模块另经ROOMGET查询附近Room并发送真实JOIN/INVITE管理命令。
 
-后台扫描通过单飞保护避免重入；连续失败触发暂停并关闭定时源，外部设备事件不能绕过暂停。显式手动搜索有独立操作入口；串口扫描与搜索的完整访问协调、取消和异常注入仍需增强。
+**真实Room：** 模块 -> `IHardwareCommandService` -> 本机S3控制面 -> ESP-NOW -> 对端S3；OFFER/CONFIRM、票据、成员快照和ACK由S3执行。PC只读取状态及提交意图，固件校验revision/term；退出leader保留旧快照重播10秒，暂缓本机CREATE/JOIN。
+
+**RGB：** 模块显式提交 -> 成员路由 -> 目标单任务worker -> 单灯RMT -> 应用结果回执。当前S3无DMA且一次最多一个事务在途，提交不等待队列空位、完成等待每事务100 ms。驱动故障锁存后不再发送新灯数据；清理失败保留资源、不重复删除，物理LED状态未知。
+
+本机ROOMGET的状态字节含RGB故障位bit6（64）和退出公告位bit7（128），只用于本机显示；它们不是设备能力位，也不是空口协议升级。故障提示建议协调退出Room后重启；退出公告提示等待10秒期限后刷新。
+
+后台扫描通过单飞保护避免重入；连续失败触发暂停并关闭定时源，外部设备事件不能绕过暂停。扫描、搜索和业务命令共用串口访问锁，业务前进行身份复核和nonce校验；真实模块关闭、手动暂停或切换端口中止后续查询批次，不重放结果未知的写命令。
 
 ## 窗口与资源生命周期
 
@@ -92,4 +108,4 @@ TriLink.PluginHost + TriLink.Plugin.Abstractions
 
 ## 后续扩展入口
 
-先增加传输服务与真实 Room 实现，保持 UI 依赖 `IRoomNetwork` 等契约；文本、资源与小游戏再成为该传输服务的消费者。不要让 UI 直接写 ESP-NOW 帧或承担文件分片缓存。详细阶段与验收条件见 [后续开发计划](ROADMAP.md)，插件清单约束见 [插件平台](PLUGIN_PLATFORM.md)。
+共享命令服务与真实Room实现已经接入，先完成真实桌面、三板Room/RGB和压力验收，再增加文本、资源与小游戏的独立插件。新应用复用明确服务边界，不让UI直接写ESP-NOW帧或承担文件分片缓存；原始文件主体仍由PC保存。详细阶段与验收条件见 [后续开发计划](ROADMAP.md)，插件清单约束见 [插件平台](PLUGIN_PLATFORM.md)。

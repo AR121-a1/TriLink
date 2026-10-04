@@ -15,6 +15,10 @@ namespace TriLink.Plugins.HardwareRoom
         public bool Synchronized { get { return (Bytes[130] & 2) != 0; } }
         public bool Waiting { get { return (Bytes[130] & 4) != 0; } }
         public bool RgbEnabled { get { return (Bytes[130] & 8) != 0; } }
+        public bool RgbFaulted { get { return (Bytes[130] & 64) != 0; } }
+        public bool Retiring { get { return (Bytes[130] & 128) != 0; } }
+        public bool JoinConfirmed { get { return (Bytes[130] & 16) != 0; } }
+        public bool JoinUncertain { get { return (Bytes[130] & 32) != 0; } }
         public uint Room { get { return Number(18); } }
         public uint Incarnation { get { return Number(22); } }
         public uint Revision { get { return Number(26); } }
@@ -81,6 +85,6 @@ namespace TriLink.Plugins.HardwareRoom
             return Hex(bytes);
         }
         public override string ToString() { return Kind==3 ? "申请者 " + Source + " · " + Name
-            : Kind==4 ? "邀请者 " + Source + " · " + Name : Name + " · " + Count + "/6 · " + Room.ToString("X8") + " · " + Leader; }
+            : Kind==7 ? "已同意，待申请者确认 " + Source : Kind==4 ? "邀请者 " + Source + " · " + Name : Name + " · " + Count + "/6 · " + Room.ToString("X8") + " · " + Leader; }
     }
 }

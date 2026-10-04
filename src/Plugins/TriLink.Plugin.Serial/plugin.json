@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "trilink.serial",
   "displayName": "USB CDC 设备发现",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "hostApi": "1.0",
   "enabled": true,
   "entryAssembly": "TriLink.Plugin.Serial.dll",

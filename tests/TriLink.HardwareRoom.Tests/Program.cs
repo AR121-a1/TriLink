@@ -29,6 +29,13 @@ internal static class Program
             Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
             var bytes=Snapshot();var packet=new RoomWire(bytes);
             Check(packet.Active && packet.Synchronized && !packet.RgbEnabled,"local status flags do not imply RGB enabled");
+            var rgbFault=Snapshot();rgbFault[130]=1|64;
+            Check(new RoomWire(rgbFault).RgbFaulted && !new RoomWire(rgbFault).RgbEnabled,"local RGB fault is distinct from enabled or unknown application result");
+            var retiring=Snapshot();retiring[130]=128;
+            Check(new RoomWire(retiring).Retiring && !new RoomWire(retiring).Active,"retirement announcement does not imply active membership");
+            var uncertain=Snapshot();uncertain[130]=4|16|32;
+            Check(new RoomWire(uncertain).Waiting && new RoomWire(uncertain).JoinConfirmed && new RoomWire(uncertain).JoinUncertain,"uncertain admission is distinct from active membership");
+            Check(new RoomWire(RoomWire.Unhex(RoomWire.Command(20,null))).Kind==20,"manual retry uses dedicated command without new admission ticket");
             Check(packet.Name=="Lab" && packet.Room==1 && packet.Incarnation==101 && packet.Revision==2 && packet.Term==1,"little-endian Room fields");
             Check(packet.Leader=="100000000001" && packet.Members[1]=="200000000002","membership join order retained");
             Check(RoomWire.ParseReply("TRILINK/3 ROOMSTATE n 00 "+RoomWire.Hex(bytes),0).Count==2,"USB Room page decodes");
@@ -56,6 +63,23 @@ internal static class Program
                 Check(((ListBox)view.Controls.Find("RoomMembers",true).Single()).Items.Count==2,"view renders hardware membership");
                 Check(view.Controls.Find("HardwareRoomStatus",true).Single().Text.Contains("leader=100000000001"),"hardware leader visible");
                 Check(view.Controls.Find("HardwareMonitor",true).Single().Text=="启动状态轮询","polling remains opt-in after refresh");
+                service.Uncertain=true;view.RefreshAll().GetAwaiter().GetResult();
+                Check(view.Controls.Find("HardwareRoomStatus",true).Single().Text.Contains("入群结果待确认"),"unknown commit is visible and does not claim membership");
+                Check(((ListBox)view.Controls.Find("RoomMembers",true).Single()).Items.Count==0,"unresolved admission has no active member actions");
+                var retryFlags=System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic;
+                ((Task)typeof(HardwareRoomView).GetMethod("RetryJoin",retryFlags).Invoke(view,null)).GetAwaiter().GetResult();
+                Check(service.Writes==1 && service.LastKind==20,"manual retry sends one explicit retry, never CREATE or JOIN");
+                Render(view,args[0]+".uncertain.png");
+                service.Uncertain=false;view.RefreshAll().GetAwaiter().GetResult();
+                int beforeFault=service.Writes;service.RgbFault=true;view.RefreshAll().GetAwaiter().GetResult();
+                Check(view.Controls.Find("HardwareRoomStatus",true).Single().Text.Contains("RGB 驱动故障，已停用"),"latched local RGB fault has an actionable recovery message");
+                Check(service.Writes==beforeFault,"displaying a driver fault never automatically retries a hardware write");
+                Render(view,args[0]+".rgb-fault.png");
+                service.RgbFault=false;view.RefreshAll().GetAwaiter().GetResult();
+                service.Retiring=true;view.RefreshAll().GetAwaiter().GetResult();
+                Check(view.Controls.Find("HardwareRoomStatus",true).Single().Text.Contains("正在重播退出公告"),"retired leader can see why new membership commands are temporarily blocked");
+                Render(view,args[0]+".retiring.png");
+                service.Retiring=false;view.RefreshAll().GetAwaiter().GetResult();
                 var members=(ListBox)view.Controls.Find("RoomMembers",true).Single();members.SelectedIndex=1;
                 var rooms=(ListBox)view.Controls.Find("NearbyRooms",true).Single();rooms.SelectedIndex=0;
                 view.RefreshAll().GetAwaiter().GetResult();
@@ -108,13 +132,17 @@ internal static class Program
     }
     private sealed class Fake : IHardwareCommandService,IDeviceDiscoveryService
     {
-        public int Calls,Searches;public bool Delay,BadResult;public TaskCompletionSource<string> Pending=new TaskCompletionSource<string>();
+        public int Calls,Searches,Writes;public byte LastKind;public bool Delay,BadResult,Uncertain,RgbFault,Retiring;public TaskCompletionSource<string> Pending=new TaskCompletionSource<string>();
         public Task<string> ExecuteAsync(string port,string command,string arguments)
         {
             ++Calls;if(Delay)return Pending.Task;
             if(command=="RGBRESULT")return Task.FromResult(BadResult?"INVALID RGBRESULT n 00000000 0":"TRILINK/3 RGBRESULT n 00000000 0");
+            if(command=="ROOM") {++Writes;LastKind=RoomWire.Unhex(arguments)[0];return Task.FromResult("TRILINK/3 OK n ROOM");}
             if(command!="ROOMGET")throw new Exception("unexpected write "+command);
-            return Task.FromResult(arguments=="00" || arguments=="01" ? "TRILINK/3 ROOMSTATE n "+arguments+" "+RoomWire.Hex(Snapshot()) : "TRILINK/3 EMPTY n");
+            var snapshot=Snapshot();if(Uncertain && arguments=="00")snapshot[130]=4|16|32;
+            if(RgbFault && arguments=="00")snapshot[130]=1|64;
+            if(Retiring && arguments=="00")snapshot[130]=128;
+            return Task.FromResult(arguments=="00" || arguments=="01" ? "TRILINK/3 ROOMSTATE n "+arguments+" "+RoomWire.Hex(snapshot) : "TRILINK/3 EMPTY n");
         }
         public IReadOnlyList<TriLinkDevice> Devices {get {return new[]{new TriLinkDevice {PortName="COM-FAKE",NodeId="100000000001",Capabilities=64},new TriLinkDevice {PortName="OLD",Capabilities=1}};}}
         public Task<IReadOnlyList<TriLinkPeer>> SearchNearbyAsync(string port){++Searches;return Task.FromResult<IReadOnlyList<TriLinkPeer>>(new[]{new TriLinkPeer{NodeId="200000000002"}});}

@@ -46,6 +46,7 @@ namespace TriLink.Plugins.HardwareRoom
             top.Controls.Add(_ports); Add(top,"更新端口",()=> { ReloadPorts(); return Task.CompletedTask; });
             Add(top,"刷新设备与 Room",RefreshAll); top.Controls.Add(_monitor); top.Controls.Add(_name);
             Add(top,"创建",()=>SendRoom(16,null,null,_name.Text)); Add(top,"退出",()=>SendRoom(5,RequireState()));
+            Add(top,"重试入群确认",RetryJoin);
             layout.Controls.Add(top,0,1); layout.Controls.Add(_status,0,2);
             var grids = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2 };
             grids.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50)); grids.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50));
@@ -121,6 +122,12 @@ namespace TriLink.Plugins.HardwareRoom
             Log("命令已由本机 S3 接收；加入/退出及副本同步以刷新状态为准。");
             await RefreshAll();
         }
+        private Task RetryJoin()
+        {
+            if(_state==null || !_state.Waiting || !_state.JoinUncertain)
+                throw new UserInputException("请刷新状态；仅结果待确认且自动重试已暂停时可手动重试。");
+            return SendRoom(20,null);
+        }
         private async Task EnableRgb()
         {
             if(MessageBox.Show(this,"仅当已核对所选板为 GPIO48 / WS2812 GRB 单灯时启用。\n本操作不验证接线，重启后自动关闭。是否确认？",
@@ -158,7 +165,7 @@ namespace TriLink.Plugins.HardwareRoom
             _state=state;
             ReplaceItems(_rooms,pages.Take(6).Where(p=>p!=null && p.Count>0));
             ReplaceItems(_members,_state.Active?_state.Members:new string[0]);
-            ReplaceItems(_requests,pages.Skip(6).Take(6).Where(p=>p!=null && p.Kind==3 && p.Room==state.Room && p.Incarnation==state.Incarnation));
+            ReplaceItems(_requests,pages.Skip(6).Take(6).Where(p=>p!=null && (p.Kind==3 || p.Kind==7) && p.Room==state.Room && p.Incarnation==state.Incarnation));
             ReplaceItems(_invites,pages.Skip(12).Where(p=>p!=null && p.Kind==4));
             var peerSelection=_peers.SelectedItem;_peers.Items.Clear();
             foreach(var peer in peers) _peers.Items.Add(peer.NodeId.Replace(":",""));
@@ -187,7 +194,11 @@ namespace TriLink.Plugins.HardwareRoom
             _status.Text=_state==null?"请选择设备并刷新；本页轮询独立受控，默认不启动。":
                 (_state.Active? _state.Name+" · "+_state.Count+"/6 · leader="+_state.Leader+" · revision="+_state.Revision
                     +(_state.Synchronized?" · 成员已确认":" · 等待同步 / 本机为成员") :"本机未加入 Room")
-                +(_state.Waiting?" · 请求等待处理":"")+(_state.RgbEnabled?" · 本机 RGB 已启用":" · 本机 RGB 关闭");
+                +(_state.Retiring?" · 正在重播退出公告；退出后10秒内暂不能创建或加入，请稍后刷新":"")
+                +(_state.JoinUncertain?" · 入群结果待确认：自动重试已暂停，请手动重试；勿重启设备或另建房间"
+                    :_state.JoinConfirmed?" · 已确认入群，等待最终名单":_state.Waiting?" · 请求等待处理":"")
+                +(_state.RgbFaulted?" · 本机 RGB 驱动故障，已停用；请检查接线并协调退出 Room 后重启设备"
+                    :_state.RgbEnabled?" · 本机 RGB 已启用":" · 本机 RGB 关闭");
         }
         private void Log(string message)
         {if(_log.TextLength>8000) _log.Clear(); _log.AppendText(DateTime.Now.ToString("HH:mm:ss")+" · "+message+Environment.NewLine);}

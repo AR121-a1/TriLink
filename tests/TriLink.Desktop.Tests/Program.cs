@@ -23,7 +23,7 @@ internal static class Program
                 throw new ArgumentException("Usage: TriLink.Desktop.Tests.exe <runtime-directory>");
             }
             var release = Path.GetFullPath(args[0]);
-            var environment = new HostEnvironment(release, new[] { "--demo" }, "desktop");
+            var environment = new HostEnvironment(release, new[] { "--demo", "--safe-mode" }, "desktop");
             using (var runtime = PluginRuntime.LoadFromProfile(
                 Path.Combine(release, "plugins"),
                 Path.Combine(release, "profiles", "desktop.profile.json"),

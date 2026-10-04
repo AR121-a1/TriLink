@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "trilink.hardware-room",
   "displayName": "真实 Room / RGB",
-  "version": "0.1.1",
+  "version": "0.2.1",
   "hostApi": "1.0",
   "enabled": true,
   "entryAssembly": "TriLink.Plugin.HardwareRoom.dll",

@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Release'
@@ -44,7 +44,7 @@ foreach ($plugin in Get-ChildItem -LiteralPath (Join-Path $runtime 'plugins') -F
         throw "Unexpected entry in plugins directory: $($plugin.FullName)"
     }
     $manifestPath = Join-Path $plugin.FullName 'plugin.json'
-    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $allowed = @('plugin.json', [string]$manifest.entryAssembly)
     foreach ($entry in Get-ChildItem -LiteralPath $plugin.FullName -Force) {
         if ($entry.PSIsContainer -or $entry.Name -notin $allowed) {

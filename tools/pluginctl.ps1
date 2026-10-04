@@ -23,7 +23,7 @@ if (-not (Test-Path -LiteralPath $resolvedProfile -PathType Leaf)) {
 }
 
 try {
-    $profile = Get-Content -LiteralPath $resolvedProfile -Raw | ConvertFrom-Json
+    $profile = Get-Content -LiteralPath $resolvedProfile -Raw -Encoding UTF8 | ConvertFrom-Json
 }
 catch {
     throw "Invalid JSON profile $resolvedProfile : $($_.Exception.Message)"
@@ -55,7 +55,7 @@ foreach ($directory in Get-ChildItem -LiteralPath $resolvedRoot -Directory | Sor
     }
 
     try {
-        $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+        $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
     }
     catch {
         throw "Invalid JSON manifest $manifestPath : $($_.Exception.Message)"

@@ -135,7 +135,7 @@ function Deploy-Plugin(
     $destinationManifest = Join-Path $destinationDirectory 'plugin.json'
     Copy-Item -LiteralPath $stagedAssembly -Destination $destinationAssembly -Force
 
-    $manifest = Get-Content -LiteralPath (Join-Path $SourceDirectory 'plugin.json') -Raw |
+    $manifest = Get-Content -LiteralPath (Join-Path $SourceDirectory 'plugin.json') -Raw -Encoding UTF8 |
         ConvertFrom-Json
     $hash = (Get-FileHash -LiteralPath $destinationAssembly -Algorithm SHA256).Hash.ToLowerInvariant()
     $manifest | Add-Member -NotePropertyName sha256 -NotePropertyValue $hash -Force
@@ -231,6 +231,18 @@ function Invoke-PluginValidation {
     }
 }
 
+function Invoke-BuiltInSmokeTests {
+    $windowsPowerShell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    if (-not (Test-Path -LiteralPath $windowsPowerShell -PathType Leaf)) {
+        throw 'Windows PowerShell is required for the .NET Framework smoke-selection regression.'
+    }
+    & $windowsPowerShell -NoProfile -NonInteractive -File (Join-Path $PSScriptRoot 'test-built-in-smoke.ps1') `
+        -Configuration $Configuration
+    if ($LASTEXITCODE -ne 0) {
+        throw "Built-in smoke selection regression failed with exit code $LASTEXITCODE"
+    }
+}
+
 function Invoke-UiSmoke([string]$Name, [string[]]$ExtraArguments) {
     $screenshot = Join-Path $uiOutput $Name
     $errorFile = $screenshot + '.error.txt'
@@ -241,7 +253,8 @@ function Invoke-UiSmoke([string]$Name, [string[]]$ExtraArguments) {
         Remove-Item -LiteralPath $errorFile -Force
     }
 
-    $arguments = @('--screenshot', $screenshot) + $ExtraArguments
+    # This gate verifies the freshly built packages, independent of retained user overrides.
+    $arguments = @('--profile', 'desktop', '--safe-mode', '--screenshot', $screenshot) + $ExtraArguments
     $uiProcess = Start-Process -FilePath $client `
         -ArgumentList $arguments `
         -WindowStyle Hidden `
@@ -249,7 +262,7 @@ function Invoke-UiSmoke([string]$Name, [string[]]$ExtraArguments) {
         -PassThru
     if ($uiProcess.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $screenshot)) {
         $detail = if (Test-Path -LiteralPath $errorFile) {
-            Get-Content -LiteralPath $errorFile -Raw
+            Get-Content -LiteralPath $errorFile -Raw -Encoding UTF8
         }
         else {
             'No startup error file was produced.'
@@ -257,7 +270,7 @@ function Invoke-UiSmoke([string]$Name, [string[]]$ExtraArguments) {
         throw "UI smoke render failed with exit code $($uiProcess.ExitCode): $detail"
     }
 
-    Write-Host "PASS ui=$screenshot"
+    Write-Host "PASS ui=$screenshot profile=desktop selection=built-ins (--safe-mode)"
 }
 
 function Invoke-DesktopLifecycleTest {
@@ -296,6 +309,15 @@ function Invoke-CoreTests {
     }
     & $tests | Tee-Object -FilePath (Join-Path $logOutput 'core-tests.log')
     if ($LASTEXITCODE -ne 0) { throw "Core tests failed with exit code $LASTEXITCODE" }
+}
+
+function Invoke-SerialLifecycleTests {
+    & (Join-Path $projectRoot 'tests\TriLink.SerialLifecycle.Tests\run.ps1') `
+        -OutputDirectory $testOutput -AbstractionsPath $abstractions |
+        Tee-Object -FilePath (Join-Path $logOutput 'serial-lifecycle-tests.log')
+    if ($LASTEXITCODE -ne 0) {
+        throw "Serial lifecycle tests failed with exit code $LASTEXITCODE"
+    }
 }
 
 function Invoke-HardwareRoomTests {
@@ -338,8 +360,10 @@ if ($PluginId -ne 'all') {
 
     Invoke-PluginSelection $PluginId
     if ($PluginId -in @('trilink.serial', 'trilink.rooms')) { Invoke-CoreTests }
+    if ($PluginId -eq 'trilink.serial') { Invoke-SerialLifecycleTests }
     if ($PluginId -eq 'trilink.hardware-room') { Invoke-HardwareRoomTests }
     Invoke-PluginValidation
+    Invoke-BuiltInSmokeTests
     Invoke-UiSmoke 'ui-plugin-update-smoke.png' @('--plugins-view')
     if ($PluginId -in @('trilink.desktop', 'trilink.modules', 'trilink.text-tools')) {
         Invoke-ModuleTests
@@ -375,10 +399,12 @@ Invoke-Compile `
     )
 
 Invoke-CoreTests
+Invoke-SerialLifecycleTests
 Invoke-HardwareRoomTests
 Invoke-ModuleTests
 
 Invoke-PluginValidation
+Invoke-BuiltInSmokeTests
 Invoke-UiSmoke 'ui-smoke.png' @()
 Invoke-UiSmoke 'ui-plugins.png' @('--plugins-view')
 Invoke-DesktopLifecycleTest
