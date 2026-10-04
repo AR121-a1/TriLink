@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "trilink.thunder",
+  "displayName": "雷霆战机",
+  "version": "0.1.0",
+  "hostApi": "1.0",
+  "enabled": true,
+  "entryAssembly": "TriLink.Plugin.Thunder.dll",
+  "entryType": "TriLink.Plugins.Thunder.ThunderPlugin",
+  "dependencies": [],
+  "requiresServices": ["trilink.module-features", "trilink.game-link"],
+  "providesServices": [],
+  "capabilities": ["pixel-shooter", "two-player-cooperation", "local-practice", "on-demand-ui"]
+}

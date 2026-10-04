@@ -1,8 +1,10 @@
 # TriLink v0.14（开发源码快照）
 
-2026-10-05 客户端源码同步：纳入9月22日至10月1日的 Room/RGB 收束与 review 修复，当前串口插件 **1.2.1**、真实 Room/RGB 模块 **0.2.1**，产品仍为 `0.14.0-local`、Host API `1.0`。仅更新 GitHub main 的源码、测试、构建工具和文档；不包含固件、EXE、运行配置、日志或截图，不新建标签或 Release。下方“未上传”描述均为对应日期的历史状态；软件构建与回归通过不代表真实桌面或三板验收通过。
+2026-10-05 雷霆战机分支：新增 **雷霆战机** 像素小游戏与独立游戏传输插件，支持单人练习、两人局域网合作。固定实体池、30 Hz 整数模拟、10 Hz 小报文同步；为后续 ESP32 桥接保留服务边界。当前游戏尚未通过 ESP32 联机，入口与预算见 [雷霆战机](docs/THUNDER.md)。游戏改动保存在 `thunder-game` 分支，不合并主干。
 
-10月5日同步目录完整Release构建通过（Windows PowerShell 5）：Core136、SerialLifecycle65、HardwareRoom47、Modules53、Desktop30、内置选择22项，七插件加载、UI渲染和运行目录检查通过；同时修正UTF-8中文清单与快捷方式脚本的编码处理。仅软件/夹具验证，未操作真实串口或固件。
+2026-10-05 主干基线源码同步：纳入9月22日至10月1日的 Room/RGB 收束与 review 修复，当前串口插件 **1.2.1**、真实 Room/RGB 模块 **0.2.1**，产品仍为 `0.14.0-local`、Host API `1.0`。主干此次同步仅包含源码、测试、构建工具和文档；不包含固件、EXE、运行配置、日志或截图，不新建标签或 Release。下方“未上传”描述均为对应日期的历史状态；软件构建与回归通过不代表真实桌面或三板验收通过。
+
+10月5日主干基线同步目录完整Release构建通过（Windows PowerShell 5）：Core136、SerialLifecycle65、HardwareRoom47、Modules53、Desktop30、内置选择22项，七插件加载、UI渲染和运行目录检查通过；同时修正UTF-8中文清单与快捷方式脚本的编码处理。仅软件/夹具验证，未操作真实串口或固件。
 
 2026-10-01 整体review修复：串口 **1.2.1**、真实模块 **0.2.1**、配套本地固件 **0.10.2**。修复重加入旧快照、同COM能力缓存不刷新和暂停/释放后旧扫描继续执行；内置构建验收固定安全模式，不被导入版本覆盖。客户端全量/串口定向及固件全新构建通过；实际桌面和三板验收待完成。本轮未上传、未烧录、未操作GPIO。详细证据、停止边界与下一步见 [本次修复记录](docs/REVIEW_FIXES_20261001.md)。
 
@@ -23,9 +25,10 @@
 | [系统架构](docs/ARCHITECTURE.md) | 宿主、插件、服务、数据流和生命周期 |
 | [真实 Room / RGB](docs/REAL_ROOM_RGB.md) | 新模块入口、回执含义、三板验收与限制 |
 | [当前修复与验收](docs/REVIEW_FIXES_20261001.md) | review修复、停止边界、内置更新验证和剩余门 |
+| [雷霆战机](docs/THUNDER.md) | 两人像素射击、局域网联机、资源预算及 ESP32 接口 |
 | [版本记录](CHANGELOG.md) | 已发布与本地开发版的范围、版本规则 |
 
-2026-10-05 源码快照：产品版本保持 `0.14.0-local`，模拟 Room 插件为 `1.1.0`；Git 正式版本标签仍为 `v0.13`。本次更新 main 源码，不新建正式 Release 或上传预编译 EXE。Host API `1.0` 与插件版本独立管理。
+2026-10-05 源码快照：产品版本保持 `0.14.0-local`，模拟 Room 插件为 `1.1.0`；Git 正式版本标签仍为 `v0.13`。雷霆战机分支以最新主干源码为基线，不新建正式 Release 或上传预编译 EXE。Host API `1.0` 与插件版本独立管理。
 
 最新本地源码变化：`trilink.serial` 1.2.1增加手动身份刷新、取消轮次与内部I/O测试边界；`trilink.hardware-room` 0.2.1保留本机RGB故障/退出公告提示及确认状态；桌面1.1.1和公共Host API不变。配套本地固件实现最多 **6 人（含本机）**的 S3 内存成员副本、审批/邀请/正常继任与 RGB 结果链路，真机验收待进行；仅克隆本仓库不能构建该固件。历史模拟规则见 [Room 1.1.0](docs/ROOMS_1_1_0.md)。
 
@@ -52,7 +55,7 @@
 - 插件 profile、清单、Host API 版本、服务注入、依赖拓扑和反向生命周期；
 - 插件服务/effect 自动回滚、重复提供者和未声明服务访问保护；
 - 每个插件 DLL 的 SHA-256 部署校验；
-- 客户端本轮完整构建通过核心136、串口生命周期65、模块53、桌面30、HardwareRoom47项，以及内置更新选择22项；profile启动、UI渲染和运行目录门通过；这些不替代真实桌面与硬件验收；
+- 客户端检查包含核心136、串口生命周期65、模块53、桌面30、HardwareRoom47、内置更新选择22及雷霆战机136项；profile启动、UI渲染和运行目录门一并验证；这些不替代真实桌面与硬件验收；
 - 已验证只重建 `trilink.desktop` 时不重编宿主及其他插件，仍能通过完整加载和 UI 门。
 
 ## 插件组成
@@ -66,17 +69,19 @@
 | `trilink.modules` | 启停、导入、恢复、功能注册 | `trilink.module-management`、`trilink.module-features` |
 | `trilink.text-tools` | 可选本地文本检查，按需创建 UI | 功能贡献：文本数据检查 |
 | `trilink.hardware-room` | 真实成员管理、GPIO48 RGB 显式启用、执行结果 | 功能贡献：真实 Room / RGB；消费共享 `trilink.hardware-commands` |
+| `trilink.game-link` | 按需、有界的局域网 UDP 游戏传输 | `trilink.game-link`；后续可替换为 ESP32 适配器 |
+| `trilink.thunder` | 像素射击、两人合作、确定性输入同步 | 功能贡献：雷霆战机 |
 
 EXE 只保留单实例、profile 选择和启动/停止。Room、串口、模拟器和 GUI 都不是宿主内置功能。
 
 ## 构建与运行
 
-不下载 NuGet 包。构建脚本使用本机 Visual Studio Roslyn 和 .NET Framework 4.8 参考程序集：
+构建脚本不下载 NuGet 包，使用 `vswhere` 自动发现本机 Visual Studio / Build Tools 的 Roslyn，以及 .NET Framework 4.8 Developer Pack 的参考程序集。支持自定义安装目录；换电脑后的安装、调试和常见问题见 [开发环境配置](docs/DEVELOPMENT_SETUP.md)。
 
 请在 **Windows PowerShell 5.1（powershell.exe）** 中执行；内置选择回归使用 .NET Framework，不使用 PowerShell 7（pwsh）。
 
 ```powershell
-# 在克隆仓库的根目录执行（需 Visual Studio 2022 Community 与 .NET Framework 4.8 开发工具）
+# 在克隆仓库的根目录执行（需 Visual Studio 2022 / Build Tools 与 .NET Framework 4.8 Developer Pack）
 .\tools\build.ps1
 ```
 
@@ -146,7 +151,7 @@ artifacts\Release\
 6. A 退出后观察 B 继承 leader、`term` 增加且 Room 保留；
 7. B 踢出 C，正式 Room 降为一人并自动解散。
 
-右侧“模块概览”显示运行模块状态；主窗口右侧“扩展模块…”打开七模块的显式管理窗口，可启停、导入更新或打开具体功能。
+右侧“模块概览”显示运行模块状态；主窗口右侧“扩展模块…”打开九模块的显式管理窗口，可启停、导入更新或打开具体功能。
 
 ## USB 识别协议
 

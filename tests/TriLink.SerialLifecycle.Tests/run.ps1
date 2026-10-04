@@ -1,13 +1,19 @@
 [CmdletBinding()]
 param(
     [string]$OutputDirectory,
-    [string]$AbstractionsPath
+    [string]$AbstractionsPath,
+    [string]$CscPath,
+    [string]$FrameworkPath
 )
 
 $ErrorActionPreference = 'Stop'
 $taskProject = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$taskCompiler = 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\Roslyn\csc.exe'
-$taskFramework = 'C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.8'
+$taskCompiler = if ([string]::IsNullOrWhiteSpace($CscPath)) {
+    'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\Roslyn\csc.exe'
+} else { $CscPath }
+$taskFramework = if ([string]::IsNullOrWhiteSpace($FrameworkPath)) {
+    'C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.8'
+} else { $FrameworkPath }
 if (-not (Test-Path -LiteralPath $taskCompiler -PathType Leaf)) { throw 'Verified Roslyn compiler is unavailable.' }
 if (-not $OutputDirectory) {
     $OutputDirectory = Join-Path ([IO.Path]::GetTempPath()) ('trilink-serial-tests-' + [Guid]::NewGuid().ToString('N'))

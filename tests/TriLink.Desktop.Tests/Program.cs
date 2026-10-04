@@ -131,7 +131,7 @@ internal static class Program
         var fake = new FakeDiscovery();
         Type formType;
         using (var reference = shell.CreateMainWindow()) { formType = reference.GetType(); }
-        var ui = Path.Combine(Path.GetDirectoryName(release), "tests", "Release", "ui");
+        var ui = Path.Combine(Path.GetDirectoryName(release), "tests", Path.GetFileName(release), "ui");
         Directory.CreateDirectory(ui);
         using (var form = (Form)Activator.CreateInstance(formType, new object[] {
             false, false, runtime.Services.GetRequired<IRoomNetwork>(), fake,

@@ -6,7 +6,7 @@
 
 2026-09-22：hardware-room0.2.0只增加状态展示和人工确认重试；OFFER/CONFIRM、票据、截止时间由S3执行，PC不承担新的一致性状态机。Room空口opcode2与旧版隔离；协议边界、未知结果和验收状态见 [阶段收束](CLOSURE_20260922.md)。
 
-扩展状态：可扩展。当前是一个 Windows 进程、一个插件宿主和七个首方 DLL。界面与业务通过服务契约通信，没有额外本机 HTTP 后端或独立托盘进程。真实 Room / RGB 已通过独立模块接入 S3，模拟仍隔离保留；ESP32 固件不包含在此仓库，真机联调待验收。
+扩展状态：可扩展。当前是一个 Windows 进程、一个插件宿主和九个首方 DLL。界面与业务通过服务契约通信，没有额外本机 HTTP 后端或独立托盘进程。真实 Room / RGB 已通过独立模块接入 S3，模拟仍隔离保留；ESP32 固件不包含在此仓库，真机联调待验收。雷霆战机新增独立游戏传输服务，当前为局域网 UDP，ESP32 适配待实现。
 
 ## 实际组成
 
@@ -25,6 +25,8 @@ TriLink.PluginHost + TriLink.Plugin.Abstractions
         +-- trilink.modules     IModuleManagementService + IModuleFeatureRegistry
         +-- trilink.text-tools  按需文本功能窗口（可选模块）
         +-- trilink.hardware-room 按需真实 Room / RGB（消费共享串口命令服务）
+        +-- trilink.game-link    IGameLinkFactory（按需有界 UDP，无后台工作）
+        +-- trilink.thunder      按需像素射击、两人合作与确定性输入同步
 ```
 
 无商业服务器依赖。真实模块通过 `IHardwareCommandService` 访问本机 S3，发现/搜索/命令共用串口锁；Room 的易失副本由 S3 持有，RGB 经成员自动路由。没有公网直连、持久化共识或自动故障选举；详见 [新模块链路与边界](REAL_ROOM_RGB.md)。
@@ -43,6 +45,8 @@ TriLink.PluginHost + TriLink.Plugin.Abstractions
 | 扩展管理插件 | `src/Plugins/TriLink.Plugin.Modules/` | 模块管理服务、按需功能注册表 |
 | 可选文本插件 | `src/Plugins/TriLink.Plugin.TextTools/` | 本地文本检查，独立功能窗口 |
 | 真实Room插件 | `src/Plugins/TriLink.Plugin.HardwareRoom/` | 本机S3状态显示、真实管理命令、RGB回执与故障/退出公告提示 |
+| 游戏传输插件 | `src/Plugins/TriLink.Plugin.GameLink/` | 按需打开的有界UDP传输与可替换传输工厂 |
+| 雷霆战机插件 | `src/Plugins/TriLink.Plugin.Thunder/` | 像素视图、固定实体池、确定性引擎和双人输入同步 |
 
 文件已按所属组件归位；部分命名空间保留历史名称 `TriLink.Core` / `TriLink.MinClient`，不等于仍在跨目录编译。契约程序集与插件有各自版本；本地产品`0.14.0-local`保持Host API `1.0`的旧接口，加法扩展以服务声明进行能力约束。
 
@@ -57,13 +61,16 @@ TriLink.PluginHost + TriLink.Plugin.Abstractions
 | `ISimulationControl` | 演示 | 桌面 |
 | `IDesktopShell` | 桌面 | 应用入口 |
 | `IModuleManagementService` | 扩展管理 | 桌面 |
-| `IModuleFeatureRegistry` | 扩展管理 | 桌面、文本工具、真实Room |
+| `IModuleFeatureRegistry` | 扩展管理 | 桌面、文本工具、真实Room、雷霆战机 |
+| `IGameLinkFactory` | 游戏传输 | 雷霆战机 |
 
 消费者在 manifest 中声明 `requiresServices`，提供者声明 `providesServices`。宿主拒绝重复提供者、缺失服务、循环依赖和未声明访问。`context.Defer()` 登记清理动作；配置失败或退出时逆序回收，消费者先于提供者停止。
 
 桌面依赖模拟控制接口，默认 profile 始终包含模拟插件；因此单纯去掉该插件并不能得到独立的真实硬件 profile。这是后续真实节点身份拆分的一部分。
 
 ## 当前数据流
+
+**雷霆战机：** 按需功能窗口 → GameSession → IGameLink → 对端会话。游戏房主每100 ms串行提交3 tick输入，两端独立运行整数引擎；连续输入确认与有界补发恢复丢包。游戏房主与Room leader分开，不修改S3成员表。ESP32将来替换传输提供者，当前不存在游戏USB桥接。资源与协议见 [雷霆战机](THUNDER.md)。
 
 **模拟房间：** UI 操作 -> `IRoomNetwork` -> `RoomSession` 校验与提交 -> 更新进程内各 `RoomReplica` -> Changed/Notice -> UI 线程刷新。快照副本存在内存中，未序列化到无线链路或磁盘。
 
@@ -108,4 +115,4 @@ TriLink.PluginHost + TriLink.Plugin.Abstractions
 
 ## 后续扩展入口
 
-共享命令服务与真实Room实现已经接入，先完成真实桌面、三板Room/RGB和压力验收，再增加文本、资源与小游戏的独立插件。新应用复用明确服务边界，不让UI直接写ESP-NOW帧或承担文件分片缓存；原始文件主体仍由PC保存。详细阶段与验收条件见 [后续开发计划](ROADMAP.md)，插件清单约束见 [插件平台](PLUGIN_PLATFORM.md)。
+共享命令服务与真实Room实现已经接入，雷霆战机现通过独立游戏服务实现局域网合作。后续先完成真实桌面、三板Room/RGB和压力验收，再接入ESP32游戏传输及其他资源应用。新应用复用明确服务边界，不让UI直接写ESP-NOW帧或承担文件分片缓存；原始文件主体仍由PC保存。详细阶段与验收条件见 [后续开发计划](ROADMAP.md)，插件清单约束见 [插件平台](PLUGIN_PLATFORM.md)。

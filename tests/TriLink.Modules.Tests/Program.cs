@@ -24,7 +24,7 @@ internal static class Program
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             var release = Path.GetFullPath(args[0]);
-            var root = Path.Combine(Path.GetDirectoryName(release), "tests", "Release", "fixtures", "modules-" + Guid.NewGuid().ToString("N"));
+            var root = Path.Combine(Path.GetDirectoryName(release), "tests", Path.GetFileName(release), "fixtures", "modules-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(root);
             CopyDirectory(Path.Combine(release, "plugins"), Path.Combine(root, "plugins"));
             CopyDirectory(Path.Combine(release, "profiles"), Path.Combine(root, "profiles"));
@@ -32,7 +32,7 @@ internal static class Program
             var store = new ModuleStore(environment);
             var baseline = store.ReadSelection(false);
             store.Validate(baseline);
-            Check(baseline.enabled.Length == 7, "seven built-in modules in baseline");
+            Check(baseline.enabled.Length == 9, "nine built-in modules in baseline");
             var catalog = new Catalog { Plugins = store.Resolve(baseline).Select(m => new PluginDescriptor {
                 Id = m.id, DisplayName = m.displayName, Version = m.version, State = PluginState.Active,
                 SourceDirectory = m.SourceDirectory }).ToList() };
@@ -127,7 +127,7 @@ internal static class Program
             File.WriteAllText(selectionFile, "{ broken");
             Reject(() => store.ReadSelection(false), "corrupt configuration fails closed");
             var safe = new ModuleManagementService(store, catalog, true);
-            Check(safe.GetSnapshot().SafeMode && safe.GetSnapshot().Modules.Count == 7, "safe mode ignores corrupt overlay");
+            Check(safe.GetSnapshot().SafeMode && safe.GetSnapshot().Modules.Count == 9, "safe mode ignores corrupt overlay");
             Probe(root, "trilink.text-tools", true, false, true);
             Reject(() => safe.SetEnabled("trilink.text-tools", false), "safe mode only permits recovery");
             safe.RestoreBuiltIns();
@@ -165,7 +165,7 @@ internal static class Program
 
     private static void VerifyManagerUi(string release, string root, IPluginCatalog catalog)
     {
-        var ui = Path.Combine(Path.GetDirectoryName(release), "tests", "Release", "ui");
+        var ui = Path.Combine(Path.GetDirectoryName(release), "tests", Path.GetFileName(release), "ui");
         Directory.CreateDirectory(ui);
         var manager = new ModuleManagementService(new ModuleStore(new HostEnvironment(root, new string[0])), catalog, false);
         var type = Assembly.LoadFrom(Path.Combine(release, "plugins", "trilink.desktop", "TriLink.Plugin.Desktop.dll"))
@@ -176,7 +176,7 @@ internal static class Program
         {
             form.Show(); Application.DoEvents();
             var grid = Field<DataGridView>(form, "_grid");
-            Check(grid.Rows.Count == 7, "management window lists all seven modules");
+            Check(grid.Rows.Count == 9, "management window lists all nine modules");
             Select(grid, "trilink.desktop");
             Check(!Field<Button>(form, "_toggle").Enabled, "UI prevents disabling foundation module");
             Select(grid, "trilink.text-tools");

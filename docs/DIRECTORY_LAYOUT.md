@@ -20,7 +20,10 @@ trilink_min_client/
 │  │  ├─ TriLink.Plugin.Rooms/       房间、副本和节点状态
 │  │  ├─ TriLink.Plugin.Simulation/  三节点演示功能
 │  │  ├─ TriLink.Plugin.Modules/     扩展管理与功能注册服务
-│  │  └─ TriLink.Plugin.TextTools/   可选的文本工具功能
+│  │  ├─ TriLink.Plugin.TextTools/   可选的文本工具功能
+│  │  ├─ TriLink.Plugin.HardwareRoom/ 真实 Room / RGB
+│  │  ├─ TriLink.Plugin.GameLink/    按需有界游戏传输
+│  │  └─ TriLink.Plugin.Thunder/     像素战机引擎、会话与视图
 │  └─ profiles/                     插件组合的源配置
 ├─ tests/                           测试源码和运行说明
 ├─ tools/                           构建、插件校验、发布检查与快捷方式生成

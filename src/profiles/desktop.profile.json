@@ -8,6 +8,8 @@
     "trilink.desktop",
     "trilink.modules",
     "trilink.text-tools",
-    "trilink.hardware-room"
+    "trilink.hardware-room",
+    "trilink.game-link",
+    "trilink.thunder"
   ]
 }
