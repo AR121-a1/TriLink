@@ -5,3 +5,8 @@
 *.json text eol=lf
 *.ps1 text eol=crlf
 *.sln text eol=crlf
+# Preserve the public validation receipt byte-for-byte alongside its ZIP copy.
+releases/v0.16.0/validation-summary.json -text
+*.zip binary
+# Keep upstream redistribution notices in their original byte representation.
+third_party/licenses/** -text

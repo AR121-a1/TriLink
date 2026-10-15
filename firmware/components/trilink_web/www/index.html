@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TriLink 0.16.0 · 本地节点</title><link rel="stylesheet" href="/app.css"><script src="/app.js" defer></script></head>
+<body><main>
+<header><span class="tag">USB LOCAL · 0.16.0</span><h1>TriLink 节点控制台</h1><p>电脑 ↔ USB 网卡 ↔ S3 ↔ ESP-NOW。无需外部服务器，不将数据保存到 S3。</p></header>
+<section class="toolbar"><button id="refresh">刷新状态</button><button id="poll">暂停轮询</button><span id="status" role="status">正在连接本地节点…</span></section>
+<div class="grid"><section><h2>本机身份与能力</h2><pre id="identity">尚未读取</pre></section><section><h2>附近节点</h2><p class="hint">只显示固件实际发现的节点；最多 6 个邻居。</p><ul id="peers"></ul></section></div>
+<section><h2>当前 Room</h2><p id="room">尚未读取</p><ul id="members"></ul><div class="toolbar"><input id="name" value="TriLink Room" aria-label="新 Room 名称" maxlength="23"><button id="create">创建 Room</button><button id="leave">退出 Room</button></div><p class="hint">操作前重新读取状态并确认。成员、邀请、审批及 RGB 请在桌面插件中管理；此页面不会自动启用或执行 RGB。</p></section>
+<section><h2>事件</h2><pre id="events" aria-live="polite"></pre></section>
+<footer>本地 HTTP API v1 · 每次只执行一个请求 · 连续 5 次刷新失败后暂停 · 写入结果未知时不自动重发</footer>
+</main></body></html>

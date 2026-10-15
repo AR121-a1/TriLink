@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Release',
@@ -11,14 +11,45 @@ param(
         'trilink.modules',
         'trilink.text-tools',
         'trilink.hardware-room',
+        'trilink.game-link',
+        'trilink.thunder',
         'trilink.desktop')]
-    [string]$PluginId = 'all'
+    [string]$PluginId = 'all',
+
+    [string]$CscPath,
+
+    [string]$FrameworkPath
 )
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$csc = 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\Roslyn\csc.exe'
-$framework = 'C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.8'
+if ([string]::IsNullOrWhiteSpace($CscPath)) {
+    $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+    if (Test-Path -LiteralPath $vswhere -PathType Leaf) {
+        $installationPath = & $vswhere -latest -products '*' `
+            -requires Microsoft.Component.MSBuild -property installationPath |
+            Select-Object -First 1
+        if (-not [string]::IsNullOrWhiteSpace($installationPath)) {
+            $CscPath = Join-Path $installationPath 'MSBuild\Current\Bin\Roslyn\csc.exe'
+        }
+    }
+}
+if ([string]::IsNullOrWhiteSpace($CscPath) -or
+    -not (Test-Path -LiteralPath $CscPath -PathType Leaf)) {
+    throw 'Roslyn compiler not found. Install Visual Studio 2022 / Build Tools, or pass -CscPath <csc.exe>.'
+}
+if ([string]::IsNullOrWhiteSpace($FrameworkPath)) {
+    $FrameworkPath = Join-Path ${env:ProgramFiles(x86)} `
+        'Reference Assemblies\Microsoft\Framework\.NETFramework\v4.8'
+}
+foreach ($reference in @('mscorlib.dll', 'System.dll', 'System.Core.dll',
+    'System.Drawing.dll', 'System.Windows.Forms.dll', 'System.Web.Extensions.dll')) {
+    if (-not (Test-Path -LiteralPath (Join-Path $FrameworkPath $reference) -PathType Leaf)) {
+        throw '.NET Framework 4.8 reference assemblies not found. Install the 4.8 Developer Pack, or pass -FrameworkPath <v4.8 directory>.'
+    }
+}
+$csc = (Resolve-Path -LiteralPath $CscPath).Path
+$framework = (Resolve-Path -LiteralPath $FrameworkPath).Path
 $output = Join-Path $projectRoot "artifacts\$Configuration"
 $pluginOutput = Join-Path $output 'plugins'
 $profileOutput = Join-Path $output 'profiles'
@@ -27,13 +58,61 @@ $testOutput = Join-Path $testRoot 'bin'
 $uiOutput = Join-Path $testRoot 'ui'
 $logOutput = Join-Path $testRoot 'logs'
 $stagingOutput = Join-Path $projectRoot "artifacts\build\$Configuration\plugins"
+$symbolOutput = Join-Path $projectRoot "artifacts\build\$Configuration\symbols"
 
-if (-not (Test-Path -LiteralPath $csc -PathType Leaf)) {
-    throw "Roslyn compiler not found at verified path: $csc"
+function Get-BuildRuntimeOutputPaths([string]$OutputDirectory, [string]$SelectedPluginId) {
+    $assemblies = [ordered]@{
+        'trilink.rooms' = 'TriLink.Plugin.Rooms.dll'
+        'trilink.serial' = 'TriLink.Plugin.Serial.dll'
+        'trilink.simulation' = 'TriLink.Plugin.Simulation.dll'
+        'trilink.modules' = 'TriLink.Plugin.Modules.dll'
+        'trilink.text-tools' = 'TriLink.Plugin.TextTools.dll'
+        'trilink.hardware-room' = 'TriLink.Plugin.HardwareRoom.dll'
+        'trilink.game-link' = 'TriLink.Plugin.GameLink.dll'
+        'trilink.thunder' = 'TriLink.Plugin.Thunder.dll'
+        'trilink.desktop' = 'TriLink.Plugin.Desktop.dll'
+    }
+    if ($SelectedPluginId -eq 'all') {
+        foreach ($name in @('TriLink.Plugin.Abstractions.dll', 'TriLink.PluginHost.dll', 'TriLink.MinClient.exe')) {
+            Join-Path $OutputDirectory $name
+        }
+        foreach ($entry in $assemblies.GetEnumerator()) {
+            Join-Path $OutputDirectory ("plugins\{0}\{1}" -f $entry.Key, $entry.Value)
+        }
+        return
+    }
+    if (-not $assemblies.Contains($SelectedPluginId)) {
+        throw "Unknown plugin id: $SelectedPluginId"
+    }
+    Join-Path $OutputDirectory ("plugins\{0}\{1}" -f $SelectedPluginId, $assemblies[$SelectedPluginId])
 }
-if (-not (Test-Path -LiteralPath $framework -PathType Container)) {
-    throw ".NET Framework 4.8 reference assemblies not found: $framework"
+
+function Assert-BuildRuntimeOutputsAvailable([string]$OutputDirectory, [string]$SelectedPluginId) {
+    foreach ($path in @(Get-BuildRuntimeOutputPaths $OutputDirectory $SelectedPluginId)) {
+        # Open only existing files: no creation, truncation, deletion or byte writes.
+        # Fail before csc can remove an output image after a sharing violation.
+        if (-not (Test-Path -LiteralPath $path)) { continue }
+        $probe = $null
+        try {
+            $probe = [System.IO.File]::Open($path, [System.IO.FileMode]::Open,
+                [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+        }
+        catch {
+            throw (("Build output is in use or unavailable: {0}. Exit TriLink from its tray menu (tray > Exit), " +
+                "then retry; this guard never stops a process or deletes an output. Detail: {1}") -f $path, $_.Exception.Message)
+        }
+        finally {
+            if ($null -ne $probe) { $probe.Dispose() }
+        }
+    }
 }
+
+# One preflight covers full and targeted builds before the first output mutation.
+# A targeted update checks only its own runtime DLL, not read-only dependencies.
+Assert-BuildRuntimeOutputsAvailable $output $PluginId
+
+Write-Host "TOOLCHAIN compiler=$csc"
+Write-Host "TOOLCHAIN framework=$framework"
 
 $null = New-Item -ItemType Directory -Path $output -Force
 $null = New-Item -ItemType Directory -Path $pluginOutput -Force
@@ -42,6 +121,9 @@ $null = New-Item -ItemType Directory -Path $testOutput -Force
 $null = New-Item -ItemType Directory -Path $uiOutput -Force
 $null = New-Item -ItemType Directory -Path $logOutput -Force
 $null = New-Item -ItemType Directory -Path $stagingOutput -Force
+if ($Configuration -eq 'Debug') {
+    $null = New-Item -ItemType Directory -Path $symbolOutput -Force
+}
 
 $commonReferences = @(
     (Join-Path $framework 'mscorlib.dll'),
@@ -85,7 +167,12 @@ function Invoke-Compile(
 
     $referenceOptions = @($commonReferences + $References | Select-Object -Unique |
         ForEach-Object { "/reference:$_" })
-    & $csc @commonOptions @referenceOptions "/target:$Target" "/out:$OutputPath" @Sources
+    $debugOptions = @()
+    if ($Configuration -eq 'Debug') {
+        $pdbPath = Join-Path $symbolOutput ([System.IO.Path]::GetFileNameWithoutExtension($OutputPath) + '.pdb')
+        $debugOptions = @('/debug:portable', "/pdb:$pdbPath")
+    }
+    & $csc @commonOptions @debugOptions @referenceOptions "/target:$Target" "/out:$OutputPath" @Sources
     if ($LASTEXITCODE -ne 0) {
         throw "$Name compilation failed with exit code $LASTEXITCODE"
     }
@@ -217,8 +304,38 @@ function Invoke-PluginSelection([string]$Id) {
         'trilink.modules' { Compile-ModulesPlugin }
         'trilink.text-tools' { Compile-TextToolsPlugin }
         'trilink.hardware-room' { Compile-HardwareRoomPlugin }
+        'trilink.game-link' { Compile-GameLinkPlugin }
+        'trilink.thunder' { Compile-ThunderPlugin }
         default { throw "Unknown plugin id: $Id" }
     }
+}
+
+function Compile-GameLinkPlugin {
+    $sourceDirectory = Join-Path $projectRoot 'src\Plugins\TriLink.Plugin.GameLink'
+    Deploy-Plugin 'trilink.game-link' 'TriLink.Plugin.GameLink.dll' $sourceDirectory `
+        (Get-SourceFiles $sourceDirectory) @($abstractions)
+}
+
+function Compile-ThunderPlugin {
+    $sourceDirectory = Join-Path $projectRoot 'src\Plugins\TriLink.Plugin.Thunder'
+    Deploy-Plugin 'trilink.thunder' 'TriLink.Plugin.Thunder.dll' $sourceDirectory `
+        (Get-SourceFiles $sourceDirectory) `
+        @($abstractions, (Join-Path $framework 'System.Drawing.dll'), (Join-Path $framework 'System.Windows.Forms.dll'))
+}
+
+function Invoke-ThunderTests {
+    $tests = Join-Path $testOutput 'TriLink.Thunder.Tests.exe'
+    $gameAssembly = Join-Path $pluginOutput 'trilink.thunder\TriLink.Plugin.Thunder.dll'
+    $linkAssembly = Join-Path $pluginOutput 'trilink.game-link\TriLink.Plugin.GameLink.dll'
+    Invoke-Compile 'TriLink.Thunder.Tests' 'exe' $tests `
+        (Get-SourceFiles (Join-Path $projectRoot 'tests\TriLink.Thunder.Tests')) `
+        @($abstractions, $pluginHost, $gameAssembly, $linkAssembly,
+            (Join-Path $framework 'System.Windows.Forms.dll'), (Join-Path $framework 'System.Drawing.dll'))
+    foreach ($dependency in @($abstractions, $pluginHost, $gameAssembly, $linkAssembly)) {
+        Copy-Item -LiteralPath $dependency -Destination $testOutput -Force
+    }
+    & $tests $output $uiOutput | Tee-Object -FilePath (Join-Path $logOutput 'thunder-tests.log')
+    if ($LASTEXITCODE -ne 0) { throw "Thunder tests failed with exit code $LASTEXITCODE" }
 }
 
 function Invoke-PluginValidation {
@@ -253,8 +370,9 @@ function Invoke-UiSmoke([string]$Name, [string[]]$ExtraArguments) {
         Remove-Item -LiteralPath $errorFile -Force
     }
 
-    # This gate verifies the freshly built packages, independent of retained user overrides.
-    $arguments = @('--profile', 'desktop', '--safe-mode', '--screenshot', $screenshot) + $ExtraArguments
+    # Exercise built-in packages offline: --demo prevents automatic native USB scans.
+    # Real hardware-page behavior is covered separately with injected fake services.
+    $arguments = @('--profile', 'desktop', '--safe-mode', '--demo', '--screenshot', $screenshot) + $ExtraArguments
     $uiProcess = Start-Process -FilePath $client `
         -ArgumentList $arguments `
         -WindowStyle Hidden `
@@ -270,7 +388,7 @@ function Invoke-UiSmoke([string]$Name, [string[]]$ExtraArguments) {
         throw "UI smoke render failed with exit code $($uiProcess.ExitCode): $detail"
     }
 
-    Write-Host "PASS ui=$screenshot profile=desktop selection=built-ins (--safe-mode)"
+    Write-Host "PASS ui=$screenshot profile=desktop selection=built-ins offline (--safe-mode --demo)"
 }
 
 function Invoke-DesktopLifecycleTest {
@@ -313,7 +431,8 @@ function Invoke-CoreTests {
 
 function Invoke-SerialLifecycleTests {
     & (Join-Path $projectRoot 'tests\TriLink.SerialLifecycle.Tests\run.ps1') `
-        -OutputDirectory $testOutput -AbstractionsPath $abstractions |
+        -OutputDirectory $testOutput -AbstractionsPath $abstractions `
+        -CscPath $csc -FrameworkPath $framework |
         Tee-Object -FilePath (Join-Path $logOutput 'serial-lifecycle-tests.log')
     if ($LASTEXITCODE -ne 0) {
         throw "Serial lifecycle tests failed with exit code $LASTEXITCODE"
@@ -362,10 +481,11 @@ if ($PluginId -ne 'all') {
     if ($PluginId -in @('trilink.serial', 'trilink.rooms')) { Invoke-CoreTests }
     if ($PluginId -eq 'trilink.serial') { Invoke-SerialLifecycleTests }
     if ($PluginId -eq 'trilink.hardware-room') { Invoke-HardwareRoomTests }
+    if ($PluginId -in @('trilink.game-link', 'trilink.thunder')) { Invoke-ThunderTests }
     Invoke-PluginValidation
     Invoke-BuiltInSmokeTests
     Invoke-UiSmoke 'ui-plugin-update-smoke.png' @('--plugins-view')
-    if ($PluginId -in @('trilink.desktop', 'trilink.modules', 'trilink.text-tools')) {
+    if ($PluginId -in @('trilink.desktop', 'trilink.modules', 'trilink.text-tools', 'trilink.game-link', 'trilink.thunder')) {
         Invoke-ModuleTests
         Invoke-DesktopLifecycleTest
     }
@@ -382,6 +502,8 @@ Compile-SimulationPlugin
 Compile-ModulesPlugin
 Compile-TextToolsPlugin
 Compile-HardwareRoomPlugin
+Compile-GameLinkPlugin
+Compile-ThunderPlugin
 Compile-DesktopPlugin
 Copy-Item -LiteralPath (Join-Path $projectRoot 'src\profiles\desktop.profile.json') `
     -Destination (Join-Path $profileOutput 'desktop.profile.json') `
@@ -402,6 +524,7 @@ Invoke-CoreTests
 Invoke-SerialLifecycleTests
 Invoke-HardwareRoomTests
 Invoke-ModuleTests
+Invoke-ThunderTests
 
 Invoke-PluginValidation
 Invoke-BuiltInSmokeTests

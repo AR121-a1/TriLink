@@ -16,7 +16,8 @@ namespace TriLink.Plugins.Serial
             context.Defer(() => _watcher.Dispose());
             context.Provide<IDeviceDiscoveryService>(_watcher);
             context.Provide<IHardwareCommandService>(_watcher);
-            context.Log("USB CDC 发现与受控轮询服务已注册。");
+            context.Provide<INodeCapabilityService>(_watcher);
+            context.Log("USB CDC 主通道 / 本地 NCM 备选通道与受控轮询服务已注册；不安装驱动、不修改路由。");
         }
 
         public void Start()

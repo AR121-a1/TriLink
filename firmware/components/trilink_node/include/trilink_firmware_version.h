@@ -1,0 +1,4 @@
+#pragma once
+
+#define TRILINK_FIRMWARE_VERSION "0.16.0"
+#define TRILINK_NODE_CONTRACT_VERSION 1U

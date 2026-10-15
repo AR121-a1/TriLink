@@ -50,12 +50,22 @@ namespace TriLink.Plugin
         void RestoreBuiltIns();
     }
 
+    // Desktop feature metadata, not an ESP32 package type or loader capability.
+    // Zero preserves the meaning of existing plugins which omit Scope.
+    public enum ModuleFeatureScope
+    {
+        DesktopTool = 0,
+        DeviceControl = 1,
+        DesktopDemo = 2,
+    }
+
     public sealed class ModuleFeature
     {
         public string Id { get; set; }
         public string ModuleId { get; set; }
         public string Title { get; set; }
         public string Description { get; set; }
+        public ModuleFeatureScope Scope { get; set; }
     }
 
     [PluginService(PluginServiceIds.ModuleFeatures)]

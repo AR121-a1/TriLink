@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 using Microsoft.Win32.SafeHandles;
+using TriLink.Core;
 
 [assembly: InternalsVisibleTo("TriLink.Core.Tests")]
 
@@ -21,12 +22,16 @@ namespace TriLink.MinClient.Serial
         public string Name { get; set; }
         public string PnpDeviceId { get; set; }
         public string Manufacturer { get; set; }
+        public NodeTransportKind TransportKind { get; set; }
 
-        public bool IsValidPort { get { return PortPattern.IsMatch(PortName ?? string.Empty); } }
+        public bool IsValidPort { get { return TransportKind == NodeTransportKind.UsbNcm
+            ? NcmEndpoint.IsEndpointName(PortName) : PortPattern.IsMatch(PortName ?? string.Empty); } }
         public bool IsProtocolCandidate
         {
             get
             {
+                if (TransportKind == NodeTransportKind.UsbNcm)
+                    return IsValidPort && WindowsNcmCatalog.IsTriLinkPnp(PnpDeviceId);
                 return IsValidPort && (Contains(Name, "TriLink")
                     || Contains(Manufacturer, "TriLink") || Contains(PnpDeviceId, "VID_303A&"));
             }

@@ -24,7 +24,7 @@ internal static class Program
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             var release = Path.GetFullPath(args[0]);
-            var root = Path.Combine(Path.GetDirectoryName(release), "tests", "Release", "fixtures", "modules-" + Guid.NewGuid().ToString("N"));
+            var root = Path.Combine(Path.GetDirectoryName(release), "tests", Path.GetFileName(release), "fixtures", "modules-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(root);
             CopyDirectory(Path.Combine(release, "plugins"), Path.Combine(root, "plugins"));
             CopyDirectory(Path.Combine(release, "profiles"), Path.Combine(root, "profiles"));
@@ -32,7 +32,7 @@ internal static class Program
             var store = new ModuleStore(environment);
             var baseline = store.ReadSelection(false);
             store.Validate(baseline);
-            Check(baseline.enabled.Length == 7, "seven built-in modules in baseline");
+            Check(baseline.enabled.Length == 9, "nine built-in modules in baseline");
             var catalog = new Catalog { Plugins = store.Resolve(baseline).Select(m => new PluginDescriptor {
                 Id = m.id, DisplayName = m.displayName, Version = m.version, State = PluginState.Active,
                 SourceDirectory = m.SourceDirectory }).ToList() };
@@ -127,7 +127,7 @@ internal static class Program
             File.WriteAllText(selectionFile, "{ broken");
             Reject(() => store.ReadSelection(false), "corrupt configuration fails closed");
             var safe = new ModuleManagementService(store, catalog, true);
-            Check(safe.GetSnapshot().SafeMode && safe.GetSnapshot().Modules.Count == 7, "safe mode ignores corrupt overlay");
+            Check(safe.GetSnapshot().SafeMode && safe.GetSnapshot().Modules.Count == 9, "safe mode ignores corrupt overlay");
             Probe(root, "trilink.text-tools", true, false, true);
             Reject(() => safe.SetEnabled("trilink.text-tools", false), "safe mode only permits recovery");
             safe.RestoreBuiltIns();
@@ -147,9 +147,25 @@ internal static class Program
         {
             var created = 0;
             var feature = new ModuleFeature { Id = "test.view", ModuleId = "test.module", Title = "Test" };
+            Check(feature.Scope == ModuleFeatureScope.DesktopTool, "legacy feature scope defaults to desktop tool");
+            feature.Scope = ModuleFeatureScope.DeviceControl;
             var lease = registry.Register(feature, () => { created++; return new Panel(); });
             feature.Title = "modified";
+            feature.Scope = ModuleFeatureScope.DesktopDemo;
             Check(created == 0 && registry.Features[0].Title == "Test", "feature registration lazy and defensive");
+            Check(registry.Features[0].Scope == ModuleFeatureScope.DeviceControl, "feature registration copies scope metadata");
+            var returned = registry.Features[0];
+            returned.Scope = ModuleFeatureScope.DesktopDemo;
+            Check(registry.Features[0].Scope == ModuleFeatureScope.DeviceControl, "returned scope metadata cannot mutate registration");
+            Reject(() => registry.Register(new ModuleFeature { Id = "test.unknown", ModuleId = "test.module", Title = "Unknown",
+                Scope = (ModuleFeatureScope)99 }, () => { created++; return new Panel(); }), "unknown positive feature scope rejected");
+            Reject(() => registry.Register(new ModuleFeature { Id = "test.negative", ModuleId = "test.module", Title = "Negative",
+                Scope = (ModuleFeatureScope)(-1) }, () => { created++; return new Panel(); }), "unknown negative feature scope rejected");
+            Check(created == 0 && registry.Features.Count == 1, "scope validation starts no feature work and leaves registrations unchanged");
+            using (var demoLease = registry.Register(new ModuleFeature { Id = "test.demo", ModuleId = "test.module", Title = "Demo",
+                Scope = ModuleFeatureScope.DesktopDemo }, () => new Panel()))
+            { Check(registry.Features.Single(item => item.Id == "test.demo").Scope == ModuleFeatureScope.DesktopDemo,
+                "desktop demo scope accepted without creating its view"); }
             Reject(() => registry.Register(feature, () => new Panel()), "duplicate feature rejected");
             using (var view = registry.CreateView("test.view")) { Check(created == 1, "feature created on demand"); }
             lease.Dispose(); lease.Dispose();
@@ -165,22 +181,38 @@ internal static class Program
 
     private static void VerifyManagerUi(string release, string root, IPluginCatalog catalog)
     {
-        var ui = Path.Combine(Path.GetDirectoryName(release), "tests", "Release", "ui");
+        var ui = Path.Combine(Path.GetDirectoryName(release), "tests", Path.GetFileName(release), "ui");
         Directory.CreateDirectory(ui);
         var manager = new ModuleManagementService(new ModuleStore(new HostEnvironment(root, new string[0])), catalog, false);
         var type = Assembly.LoadFrom(Path.Combine(release, "plugins", "trilink.desktop", "TriLink.Plugin.Desktop.dll"))
             .GetType("TriLink.MinClient.ModulesForm", true);
         using (var features = new ModuleFeatureRegistry())
         using (var lease = features.Register(new ModuleFeature { Id = "trilink.text-tools.inspect", ModuleId = "trilink.text-tools", Title = "文本数据检查" }, () => new TextToolsView()))
+        using (var deviceLease = features.Register(new ModuleFeature { Id = "test.device", ModuleId = "trilink.hardware-room", Title = "设备控制测试",
+            Scope = ModuleFeatureScope.DeviceControl }, () => { throw new InvalidOperationException("Metadata-only device fixture must not start."); }))
+        using (var demoLease = features.Register(new ModuleFeature { Id = "test.demo", ModuleId = "trilink.thunder", Title = "PC 演示测试",
+            Scope = ModuleFeatureScope.DesktopDemo }, () => { throw new InvalidOperationException("Metadata-only demo fixture must not start."); }))
         using (var form = (Form)Activator.CreateInstance(type, new object[] { manager, features }))
         {
             form.Show(); Application.DoEvents();
+            Check(form.Text.Contains("本机 PC 扩展") && Field<Label>(form, "_status").Text.Contains("不是板端包安装入口"),
+                "management UI explicitly separates PC extensions from board packages");
             var grid = Field<DataGridView>(form, "_grid");
-            Check(grid.Rows.Count == 7, "management window lists all seven modules");
+            Check(grid.Rows.Count == 9, "management window lists all nine modules");
             Select(grid, "trilink.desktop");
             Check(!Field<Button>(form, "_toggle").Enabled, "UI prevents disabling foundation module");
+            Select(grid, "trilink.hardware-room");
+            Check(Field<TextBox>(form, "_details").Text.StartsWith("所选功能：设备控制测试\r\n功能范围：")
+                && Field<TextBox>(form, "_details").Text.Contains("PC 管理 / 板端执行") && form.OwnedForms.Length == 0,
+                "device-control selection describes scope without starting hardware or a feature window");
+            Select(grid, "trilink.thunder");
+            Check(Field<TextBox>(form, "_details").Text.StartsWith("所选功能：PC 演示测试\r\n功能范围：")
+                && Field<TextBox>(form, "_details").Text.Contains("PC 演示 · 非板端任务包") && form.OwnedForms.Length == 0,
+                "desktop-demo selection describes scope without starting its view");
             Select(grid, "trilink.text-tools");
             Check(Field<Button>(form, "_toggle").Enabled && Field<Button>(form, "_open").Enabled, "optional module has explicit actions");
+            Check(Field<TextBox>(form, "_details").Text.StartsWith("所选功能：文本数据检查\r\n功能范围：")
+                && Field<TextBox>(form, "_details").Text.Contains("本机工具 · PC 执行"), "legacy desktop tool has explicit PC execution scope");
             Shot(form, Path.Combine(ui, "ui-modules.png"));
             Field<Button>(form, "_open").PerformClick(); Application.DoEvents();
             var tool = form.OwnedForms.Single();

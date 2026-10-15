@@ -45,6 +45,13 @@ namespace TriLink.MinClient
         private readonly DataGridView _pluginsGrid;
         private readonly TextBox _eventLog = new TextBox();
         private SplitContainer _mainSplit;
+        private TableLayoutPanel _rootLayout;
+        private GroupBox _eventGroup;
+        private readonly Panel _hardwareHost = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Name = "RealDeviceWorkspace" };
+        private Control _hardwareView;
+        private string _connectionHint;
+        private bool _serialSubscribed;
+        private readonly int _uiThreadId = System.Threading.Thread.CurrentThread.ManagedThreadId;
         private TabControl _roomTabs;
         private TabPage _pluginsTab;
 
@@ -80,9 +87,11 @@ namespace TriLink.MinClient
             _simulationVisible = demoMode;
 
             TraceLifecycle("construct");
-            Text = "TriLink 最小客户端";
+            Text = "TriLink 节点控制台 · 0.16.0";
             MinimumSize = new Size(980, 640);
-            Size = new Size(1180, 760);
+            var workingArea = Screen.PrimaryScreen.WorkingArea;
+            Size = new Size(Math.Max(980, Math.Min(1180, workingArea.Width)),
+                Math.Max(640, Math.Min(930, workingArea.Height)));
             StartPosition = FormStartPosition.CenterScreen;
             Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
             BackColor = Color.FromArgb(245, 247, 250);
@@ -96,27 +105,30 @@ namespace TriLink.MinClient
             _network.Changed += NetworkChanged;
             _network.Notice += NetworkNotice;
 
-            _serialWatcher.DeviceArrived += SerialDeviceArrived;
-            _serialWatcher.DeviceRemoved += SerialDeviceRemoved;
-            _serialWatcher.Status += SerialStatus;
-            _serialWatcher.PollingStateChanged += SerialPollingStateChanged;
-
             _trayIcon = CreateTrayIcon();
             BuildLayout();
             BindHandlers();
-            SerialPollingStateChanged(this, EventArgs.Empty);
-            foreach (var device in _serialWatcher.Devices)
+            // Subscribe only after there is a UI handle; replay cached identity so startup events are not lost.
+            HandleCreated += (_, __) =>
             {
-                AddOrUpdateSerialDevice(device, false);
-            }
-
+                if (_serialSubscribed) return;
+                _serialSubscribed = true;
+                _serialWatcher.DeviceArrived += SerialDeviceArrived;
+                _serialWatcher.DeviceRemoved += SerialDeviceRemoved;
+                _serialWatcher.Status += SerialStatus;
+                _serialWatcher.PollingStateChanged += SerialPollingStateChanged;
+                foreach (var device in _serialWatcher.Devices) AddOrUpdateSerialDevice(device, false);
+                SerialPollingStateChanged(this, EventArgs.Empty);
+            };
+            SerialPollingStateChanged(this, EventArgs.Empty);
             ReloadNodeChoices("10:00:00:00:00:01");
             RefreshUi();
 
             Shown += (_, __) =>
             {
                 BalanceMainPanels();
-                Log("客户端已启动：宿主已加载首方插件，USB CDC 识别服务就绪。", false);
+                Log("节点控制台已启动：PC 负责管理与展示；宿主已加载本机 PC 扩展，USB CDC 识别服务就绪。", false);
+                Log("板端资源同步、任务包与 OTA 需设备明确声明支持；本版本不将 PC DLL 下发到 S3。", false);
                 if (demoMode)
                 {
                     Log("三节点模拟已上线。可从电脑 A 创建房间并邀请 B/C。", false);
@@ -238,6 +250,7 @@ namespace TriLink.MinClient
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 145F));
             Controls.Add(root);
+            _rootLayout = root;
 
             root.Controls.Add(BuildToolbar(), 0, 0);
 
@@ -252,7 +265,11 @@ namespace TriLink.MinClient
             _mainSplit.Panel2.Padding = new Padding(4, 0, 0, 0);
             _mainSplit.Panel1.Controls.Add(BuildNearbyPanel());
             _mainSplit.Panel2.Controls.Add(BuildRoomPanel());
-            root.Controls.Add(_mainSplit, 0, 1);
+            var workspace = new Panel { Dock = DockStyle.Fill };
+            workspace.Controls.Add(_mainSplit);
+            workspace.Controls.Add(_hardwareHost);
+            _hardwareHost.Resize += (_, __) => SizeHardwareView();
+            root.Controls.Add(workspace, 0, 1);
 
             var logGroup = new GroupBox
             {
@@ -268,6 +285,59 @@ namespace TriLink.MinClient
             _eventLog.BorderStyle = BorderStyle.FixedSingle;
             logGroup.Controls.Add(_eventLog);
             root.Controls.Add(logGroup, 0, 2);
+            _eventGroup = logGroup;
+        }
+
+        private void RefreshWorkspace()
+        {
+            bool real = !_simulationVisible;
+            _mainSplit.Visible = !real;
+            _hardwareHost.Visible = real;
+            _eventGroup.Visible = !real;
+            _rootLayout.RowStyles[2].Height = real ? 0 : 145;
+            // The real page owns its actual controls and log. Never show dead simulated actions beside it.
+            _searchButton.Visible = _simulationVisible;
+            _createRoomButton.Visible = _simulationVisible;
+            _leaveRoomButton.Visible = _simulationVisible;
+            if (!real) return;
+            if (_hardwareView == null)
+            {
+                try
+                {
+                    if (!_moduleFeatures.Features.Any(feature => feature.Id == "trilink.hardware-room.control"))
+                    {
+                        _hardwareView = new Label { Text = "真实 Room / RGB 模块未启用。请在扩展模块中启用，随后从托盘退出并重新启动。\r\n本页面不会使用模拟 Room 代替真实设备。",
+                            Padding = new Padding(20), ForeColor = Color.Firebrick };
+                    }
+                    else
+                    {
+                        _hardwareView = _moduleFeatures.CreateView("trilink.hardware-room.control");
+                    }
+                    _hardwareView.Dock = DockStyle.None;
+                    _hardwareHost.Controls.Add(_hardwareView);
+                }
+                catch (Exception exception)
+                {
+                    _hardwareView?.Dispose();
+                    _hardwareView = new Label { Text = "真实设备界面加载失败：" + exception.Message + "\r\n可在扩展模块中恢复内置模块。",
+                        Padding = new Padding(20), ForeColor = Color.Firebrick };
+                    _hardwareHost.Controls.Add(_hardwareView);
+                }
+            }
+            SizeHardwareView();
+            _hardwareHost.BringToFront();
+        }
+
+        private void SizeHardwareView()
+        {
+            if (_hardwareView == null || _hardwareView.IsDisposed) return;
+            var desired = new Size(Math.Max(600, _hardwareHost.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 2),
+                Math.Max(650, _hardwareHost.ClientSize.Height));
+            if (_hardwareView.Size == desired) return;
+            var scroll = new Point(-_hardwareHost.AutoScrollPosition.X, -_hardwareHost.AutoScrollPosition.Y);
+            _hardwareView.Size = desired;
+            _hardwareHost.AutoScrollMinSize = new Size(600, 650);
+            _hardwareHost.AutoScrollPosition = scroll;
         }
 
         private Control BuildToolbar()
@@ -488,12 +558,12 @@ namespace TriLink.MinClient
                 if (_serialWatcher.IsPolling)
                 {
                     _serialWatcher.PausePolling();
-                    Log("USB 串口轮询已手动暂停。", false);
+                    Log("USB 连接发现已手动暂停（CDC / NCM）。", false);
                 }
                 else
                 {
                     _serialWatcher.ResumePolling();
-                    Log("USB 串口轮询已手动启动；失败计数清零并立即扫描。", true);
+                    Log("USB 连接发现已手动启动（优先 CDC）；失败计数清零并立即扫描。", true);
                 }
             };
             _searchButton.Click += async (_, __) => await SearchNearbyAsync();
@@ -516,12 +586,13 @@ namespace TriLink.MinClient
             _refreshing = true;
             try
             {
+                RefreshWorkspace();
                 var current = CurrentNode;
                 _simulateButton.Text = _simulationVisible ? "退出模拟" : "启用模拟";
                 if (current == null)
                 {
                     _modeLabel.Text = "真实硬件模式 · 等待设备";
-                    _statusLabel.Text = "未识别本机设备：请接 S3 原生 USB 数据口（CH340/CH343 仅烧录）。";
+                    _statusLabel.Text = _connectionHint ?? "未识别本机设备：请接 S3 原生 USB 数据口（CH340/CH343 仅烧录）。";
                     _statusLabel.ForeColor = Color.Firebrick;
                     _searchButton.Enabled = false;
                     _createRoomButton.Enabled = false;
@@ -531,7 +602,7 @@ namespace TriLink.MinClient
                     _requestsGrid.Rows.Clear();
                     _invitationsGrid.Rows.Clear();
                     _roomHeader.Text = "未连接真实设备";
-                    _replicaLabel.Text = "USB 自动识别成功后才能扫描附近设备；Room 当前仅支持模拟演示。";
+                    _replicaLabel.Text = "真实 Room / RGB 已在主界面；接原生 USB，识别后点击刷新设备与 Room。";
                     PopulatePlugins();
                     return;
                 }
@@ -544,7 +615,7 @@ namespace TriLink.MinClient
                     ? Color.FromArgb(30, 142, 90)
                     : Color.Firebrick;
 
-                _searchButton.Enabled = !_searchActive && current.IsOnline
+                _searchButton.Enabled = current.IsSimulated && !_searchActive && current.IsOnline
                     && (current.IsSimulated || !string.IsNullOrWhiteSpace(current.PortName));
                 _createRoomButton.Enabled = current.IsSimulated && room == null && current.IsOnline;
                 _leaveRoomButton.Enabled = current.IsSimulated && room != null;
@@ -553,8 +624,8 @@ namespace TriLink.MinClient
                 PopulateInvitations(current.NodeId);
                 if (!current.IsSimulated)
                 {
-                    _roomHeader.Text = "真实 Room / RGB → 扩展模块";
-                    _replicaLabel.Text = "请在扩展模块中打开「真实 Room / RGB」；需配套新版固件。本页房间按钮仅用于模拟演示。";
+                    _roomHeader.Text = "真实 Room / RGB";
+                    _replicaLabel.Text = "当前主页面直接操作 S3；所有动作与状态来自真实设备。";
                 }
                 PopulatePlugins();
             }
@@ -938,11 +1009,7 @@ namespace TriLink.MinClient
 
         private void SerialDeviceArrived(object sender, TriLinkDeviceEventArgs e)
         {
-            if (InvokeRequired)
-            {
-                BeginInvoke(new Action(() => SerialDeviceArrived(sender, e)));
-                return;
-            }
+            if (QueueSerialCallback(() => SerialDeviceArrived(sender, e))) return;
 
             AddOrUpdateSerialDevice(e.Device, true);
         }
@@ -954,7 +1021,7 @@ namespace TriLink.MinClient
                 new NodeInfo(device.NodeId, device.DisplayName, false)
                 {
                     IsOnline = true,
-                    Transport = "USB CDC",
+                    Transport = device.TransportKind==NodeTransportKind.UsbNcm?"USB NCM":"USB CDC",
                     PortName = device.PortName,
                 });
             ReloadNodeChoices(device.NodeId);
@@ -978,11 +1045,7 @@ namespace TriLink.MinClient
 
         private void SerialDeviceRemoved(object sender, TriLinkDeviceEventArgs e)
         {
-            if (InvokeRequired)
-            {
-                BeginInvoke(new Action(() => SerialDeviceRemoved(sender, e)));
-                return;
-            }
+            if (QueueSerialCallback(() => SerialDeviceRemoved(sender, e))) return;
 
             try
             {
@@ -999,22 +1062,16 @@ namespace TriLink.MinClient
 
         private void SerialStatus(object sender, string message)
         {
-            if (InvokeRequired)
-            {
-                BeginInvoke(new Action(() => SerialStatus(sender, message)));
-                return;
-            }
+            if (QueueSerialCallback(() => SerialStatus(sender, message))) return;
 
+            _connectionHint = message;
+            if (CurrentNode == null || !CurrentNode.IsOnline) _statusLabel.Text = message;
             Log(message, false);
         }
 
         private void SerialPollingStateChanged(object sender, EventArgs e)
         {
-            if (InvokeRequired)
-            {
-                BeginInvoke(new Action(() => SerialPollingStateChanged(sender, e)));
-                return;
-            }
+            if (QueueSerialCallback(() => SerialPollingStateChanged(sender, e))) return;
 
             var running = _serialWatcher.IsPolling;
             _pollingButton.Text = running ? "暂停轮询" : "启动轮询";
@@ -1024,6 +1081,19 @@ namespace TriLink.MinClient
             _pollingButton.ForeColor = running
                 ? Color.FromArgb(35, 43, 54)
                 : Color.White;
+        }
+
+        private bool QueueSerialCallback(Action callback)
+        {
+            if (IsDisposed || Disposing) return true;
+            if (System.Threading.Thread.CurrentThread.ManagedThreadId == _uiThreadId) return false;
+            if (!IsHandleCreated) return true;
+            try
+            {
+                BeginInvoke(new Action(() => { if (!IsDisposed && !Disposing) callback(); }));
+            }
+            catch (InvalidOperationException) { /* Handle was destroyed while the callback was queued. */ }
+            return true;
         }
 
         private void ShowNotice(string title, string message, bool bringToFront)
@@ -1114,7 +1184,7 @@ namespace TriLink.MinClient
             var icon = new NotifyIcon
             {
                 Icon = SystemIcons.Application,
-                Text = "TriLink 最小客户端",
+                Text = "TriLink 节点控制台",
                 Visible = true,
                 ContextMenuStrip = menu,
             };

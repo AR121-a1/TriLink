@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "id": "trilink.serial",
-  "displayName": "USB CDC 设备发现",
-  "version": "1.2.1",
+  "displayName": "USB CDC / NCM 设备发现",
+  "version": "1.4.0",
   "hostApi": "1.0",
   "enabled": true,
   "entryAssembly": "TriLink.Plugin.Serial.dll",
   "entryType": "TriLink.Plugins.Serial.SerialPlugin",
   "dependencies": [],
   "requiresServices": [],
-  "providesServices": ["trilink.device-discovery", "trilink.hardware-commands"],
-  "capabilities": ["usb-cdc", "device-discovery", "serial-search", "polling-circuit-breaker"]
+  "providesServices": ["trilink.device-discovery", "trilink.hardware-commands", "trilink.node-capabilities.v1"],
+  "capabilities": ["usb-cdc", "usb-ncm-local", "device-discovery", "serial-search", "polling-circuit-breaker", "node-module-descriptor-v1"]
 }

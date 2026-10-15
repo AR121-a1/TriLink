@@ -1,0 +1,8 @@
+build*/
+sdkconfig
+sdkconfig.old
+managed_components/
+# dependencies.lock is a reviewed, pinned source input and is published.
+*.su
+artifacts/
+__pycache__/

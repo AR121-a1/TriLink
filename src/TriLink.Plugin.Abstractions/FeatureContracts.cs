@@ -76,6 +76,12 @@ namespace TriLink.Core
         public string Message { get; private set; }
     }
 
+    public enum NodeTransportKind
+    {
+        UsbSerial = 0,
+        UsbNcm = 1,
+    }
+
     public sealed class TriLinkDevice
     {
         public string PortName { get; set; }
@@ -87,6 +93,12 @@ namespace TriLink.Core
         public uint Capabilities { get; set; }
 
         public string PnpDeviceId { get; set; }
+
+        // PortName remains the machine endpoint key, never a translated display label.
+        public NodeTransportKind TransportKind { get; set; }
+
+        // Present only after a locally enumerated USB NCM endpoint passed HELLO.
+        public string ManagementUrl { get; set; }
     }
 
     public sealed class TriLinkPeer

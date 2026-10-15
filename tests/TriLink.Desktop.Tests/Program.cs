@@ -131,7 +131,7 @@ internal static class Program
         var fake = new FakeDiscovery();
         Type formType;
         using (var reference = shell.CreateMainWindow()) { formType = reference.GetType(); }
-        var ui = Path.Combine(Path.GetDirectoryName(release), "tests", "Release", "ui");
+        var ui = Path.Combine(Path.GetDirectoryName(release), "tests", Path.GetFileName(release), "ui");
         Directory.CreateDirectory(ui);
         using (var form = (Form)Activator.CreateInstance(formType, new object[] {
             false, false, runtime.Services.GetRequired<IRoomNetwork>(), fake,
@@ -139,6 +139,7 @@ internal static class Program
             runtime.Services.GetRequired<IPluginCatalog>(), "desktop",
             runtime.Services.GetRequired<IModuleManagementService>(), runtime.Services.GetRequired<IModuleFeatureRegistry>() }))
         {
+            Control realView = null;
             try
             {
                 form.Show();
@@ -152,6 +153,14 @@ internal static class Program
                 Require(Field<Button>(form, "_pollingButton").Text == "暂停轮询",
                     "initial polling caption reflects already-running service");
                 var background = Field<Button>(form, "_backgroundButton");
+                var realWorkspace = Field<Panel>(form, "_hardwareHost");
+                realView = Field<Control>(form, "_hardwareView");
+                Require(realWorkspace.Visible && realView != null && !realView.IsDisposed
+                    && realView.Controls.Find("HardwareRefresh", true).Length == 1,
+                    "normal startup embeds the actual hardware Room view without a module-manager detour");
+                Require(!search.Visible && !Field<Button>(form, "_createRoomButton").Visible
+                    && !Field<Button>(form, "_leaveRoomButton").Visible,
+                    "real workspace hides simulated-only business buttons rather than leaving dead actions");
                 Require(background.Right <= background.Parent.ClientSize.Width,
                     "hardware waiting text does not hide toolbar actions");
                 search.PerformClick();
@@ -179,27 +188,30 @@ internal static class Program
 
                 simulate.PerformClick();
                 Require(choices.Items.Count == 3 && search.Enabled, "simulation requires explicit activation");
+                Require(!realWorkspace.Visible && search.Visible, "explicit demo changes the whole workspace, not the real device state");
                 search.PerformClick();
                 Require(fake.SearchCalls == 0 && nearby.Rows.Count == 2, "simulation never calls the hardware adapter");
                 shell.SaveScreenshot(form, Path.Combine(ui, "ui-explicit-simulation.png"));
                 simulate.PerformClick();
-                Require(choices.Items.Count == 0 && !search.Enabled, "exit simulation returns to hardware waiting state");
+                Require(choices.Items.Count == 0 && !search.Enabled && realWorkspace.Visible
+                    && ReferenceEquals(realView, Field<Control>(form, "_hardwareView")),
+                    "exit simulation restores the same real view without duplicating hardware subscriptions");
 
                 var device = new TriLinkDevice { NodeId = "80:B5:4E:00:00:01", DisplayName = "TEST LOCAL",
                     PortName = "COM99", PnpDeviceId = @"USB\VID_303A&PID_1001\TEST" };
                 fake.Arrive(device);
-                Require(choices.Items.Count == 1 && search.Enabled
+                Require(choices.Items.Count == 1 && !search.Visible
                     && !Field<Button>(form, "_createRoomButton").Enabled,
-                    "recognized local device enables real search; hardware Room uses its own module");
+                    "recognized local device keeps real operations in the embedded hardware page");
                 fake.Peers = new[] { new TriLinkPeer { NodeId = "80:B5:4E:00:00:02", DisplayName = "TEST REMOTE", Rssi = -42 } };
-                search.PerformClick();
+                RunDiagnosticSearch(form);
                 Require(fake.SearchCalls == 1 && nearby.Rows.Count == 1 && choices.Items.Count == 1,
-                    "real peers are displayed without becoming fake local computers");
+                    "legacy diagnostic search never converts real peers into simulated local computers");
                 fake.Peers = new TriLinkPeer[0];
-                search.PerformClick();
+                RunDiagnosticSearch(form);
                 Require(fake.SearchCalls == 2 && nearby.Rows.Count == 0, "completed empty search clears stale real peers");
                 fake.FailSearch = true;
-                search.PerformClick();
+                RunDiagnosticSearch(form);
                 Require(Field<TextBox>(form, "_eventLog").Text.Contains("搜索失败：TEST TIMEOUT"),
                     "adapter timeout is displayed as failure, not zero-peer success");
                 fake.Remove(device);
@@ -212,8 +224,17 @@ internal static class Program
                 Require(fake.IsPolling && fake.ConsecutiveFailures == 0, "manual resume clears failure count");
             }
             finally { shell.ExitApplication(form); }
+            Require(realView.IsDisposed, "main exit disposes its embedded real device control");
         }
         Console.WriteLine("PASS mode guards with fake discovery; not physical USB verification");
+    }
+
+    private static void RunDiagnosticSearch(Form form)
+    {
+        // This retained read-only diagnostic path is not the user-facing simulated toolbar.
+        ((Task)form.GetType().GetMethod("SearchNearbyAsync", BindingFlags.Instance | BindingFlags.NonPublic)
+            .Invoke(form, new object[0])).GetAwaiter().GetResult();
+        Application.DoEvents();
     }
 
     private sealed class FakeDiscovery : IDeviceDiscoveryService

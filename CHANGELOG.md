@@ -1,5 +1,104 @@
 # 版本记录
 
+## 2026-10-15 - 0.16.0 public source and package distribution
+
+- Include client source, tests, tools and documentation at the root, with firmware source under `firmware/`.
+- Publish the selected original PC ZIP and separate firmware image ZIP under [releases/v0.16.0](releases/v0.16.0/README.md), with a portable [validation summary](releases/v0.16.0/validation-summary.json) and [manifest](releases/v0.16.0/manifest.json).
+- This explicitly supersedes earlier client-only/no-firmware publication policy. Earlier dated no-upload statements remain historical; package inclusion does not change their build or hardware flags.
+- Preserve the 2026-10-14 individual three-board CDC results and unresolved NCM Code 10 limitation. No new build, flash, Room/RGB action or hardware acceptance is implied by publication.
+- Exclude user module overlays, full-device backups, machine-specific shortcuts, TEMP worktrees and unrestricted local logs from this distribution.
+
+
+## 2026-10-12 — 0.16.0-local USB 接口平台（本地，未上传）
+
+- 固件升级 TinyUSB CDC+NCM，保留 Windows 10 CDC 控制路径；NCM 仅是主机到本块板的本地管理链路，不是透明三机 IP 网络。
+- 固件单命令 owner 仲裁 CDC 与 HTTP，超时旧回执隔离；板内轻量网页、有限 mailbox、来源/令牌/输入边界。
+- 客户端复用既有 I/O owner 与共享节点会话，CDC 优先、NCM 绑定接口；无不确定写入跨通道重放。端点元数据保持真实目标与显示分离。
+- desktop/serial `1.4.0`、hardware-room `0.6.0`，Host API `1.0`。整套运行目录升级，旧目录保留，不自动烧录或安装驱动。
+- 功能边界、构建与硬件验收状态见 [0.16.0 记录](docs/RELEASE_0160.md)。文本/文件/OTA/HID 等后续能力不作本轮完成声明。
+
+## 2026-10-11 — 0.15.0-local 公共节点底座（本地，未上传）
+
+- desktop/serial 1.3.0、hardware-room 0.5.0，保留 Host API 1.0；整套升级共享契约和插件。
+- 新 `INodeSessionService`：跨页统一 FIFO、刷新、快照、去重、回执与生命周期，页面不再各自调度 USB 业务；共享刷新 Task 保持有界，页面关闭不终止已提交跟踪。
+- 新 `INodeCapabilityService`：新固件 CAPS 描述、旧固件保守兼容；严格解析，排队绑定原 MAC/PnP/能力，防止同 COM 换板误发；本机启动编号使用本机成员条目而非 Room 来源字段。
+- 配套本地固件 0.15.0：4槽静态应用分发器，已有 RGB 接入，能力只声明 RGB。App 807584 B、静态 DIRAM 149191 B，分区不变，无新增任务栈/内容存储/动态代码加载。
+- 这是职责方案阶段 A；文本 P2P、连续文件流、扩展对齐和实时子模式继续按 B–E 开发，不虚报可用。本轮未访问实板、未烧录、未上传；软件证据与交付见 [版本记录](docs/RELEASE_0150.md)。
+
+## 2026-10-10 — 0.14.4-local 时序边界补丁（本地，未上传）
+
+- 产品0.14.4-local、desktop1.2.3、hardware-room0.4.1；serial1.2.2/Host API1.0/本地固件0.10.2不变，不新增公共调度框架、板端能力或串口所有者。
+- 第五次后台自动刷新失败时先清除light/full合并刷新意图再停timer，避免排队的第六批读把失效状态恢复为就绪；显式手动启动仍清零并立即读。
+- RGB在途去重键改为generation/local MAC/physical target，单机CREATE转为活动Room后同一物理目标仍去重；出队Room/boot/角色/许可复核保留，不允许旧上下文写入。不同目标与RGB禁用仍可排队。
+- Release/Debug均exit0、各1067项普通速度软件检查：Core136、Serial126、HardwareRoom225（194+31）、Modules64、Thunder444、Desktop34、Smoke/Guard38。构建UI smoke固定desktop+safe-mode+demo，防止真实串口自动扫描；未改变正常客户端启动。
+- 同一个v21 fake探针：旧0.14.3正常速度和20×均在上述两项失败；0.14.4正常速度12场景/132断言、20×12场景/130断言均零失败，QPC约1.0008/19.9970。两种模式断言数差2来自正常速度专有时限检查；不宣称所有时间API等比例缩放、1067项全量加速或真机验收。早期V1 49项有限加速历史独立保留，不能覆盖新增v21场景。
+- 长测26项零失败：30.0379逻辑分钟/90.113真实秒，实际Timer回调777、读取7858、SEARCH112、最大并发I/O=1，三次暂停恢复、零写入。倍率最终恢复1×、父runner退出0；资源样本仅观测，不证明零泄漏或真实30分钟无线耐久。
+- 独立0.14.4运行目录22便携＋3定位快捷方式、九清单及91输入校验通过；ZIP22项/158299B，SHA256 `7519880EC0DDEE593E4D7B228FA50BAC53250683C59EF373561A535BA83DCC3F`，见交付收据 (historical local evidence, not included: `artifacts/tests/NodeConsole-Timing-0144/delivery-receipt.json`)。正式证据在`artifacts/tests/NodeConsole-Timing-0144/`，冻结副本与旧0.14.3包/运行目录/证据保留。本轮未访问真实USB/无线/GPIO，不改/烧固件，不上传或创建Release。详见 [时序补丁记录](docs/TIMING_PATCH_0144.md)。
+
+## 0.14.3-local — 前台意图与后台让路（本地，未上传）
+
+- 产品0.14.3-local、desktop1.2.2、hardware-room0.4.0，serial1.2.2/Host API1.0/本地固件0.10.2保持；不是板端新任务或公共全局调度框架。
+- 每页FIFO最多8等待项，在途另计；捕获点击时名称/目标/身份/Room/票据，出队真实复核；同一动作去重，审批/拒绝等待6秒、其他15秒，过期不写。底层USB仍共享串行，跨页面不是全局业务事务锁。
+- 前台优先，后台在已开始一笔I/O返回后让路；leader约2秒、其他约5秒合并轻量刷新，active SEARCH至少15秒追加一笔，不每次退回完整22笔。手动完整刷新/未入Room仍较重，固件8秒窗口不变且不保证实时审批。
+- 暂停/换板/销毁/未知清队尾与两类refresh flags，先保存当前动作引用再取消，避免同步收尾空引用及旧刷新复活；已提交可能在途，不能撤销或自动重放。phase5按应用未知处理，不计作USB失败。保留完整ex.ToString诊断，不关闭.NET异常提示。
+- 隔离Release/Debug均exit0，各1034项：Core136、Serial126、HardwareRoom194、Modules64、Thunder444、Desktop34、Smoke/Guard36。194项fake不替代真实前台写FIFO；OpenSpeedy后加隔离时间测试另记，不计入1034或据此宣称加速通过。
+- COM_PORT/Board1实际主表单工厂+共享USB只读探针31/31完成，exit0/stderr空；忙中两次刷新＋端口更新同步提交合计2ms为本机单次观察，不是完整读取耗时或性能承诺。暂停/手动刷新恢复，原Room16/inc44360405/rev2/term1、Board1 -> Board2成员顺序、RGB许可false保持，无新Room/RGB/固件写入；旧RGB ID1仅历史结果读取。
+- 91冻结源码/构建输入匹配，独立runtime22便携＋3定位快捷方式；ZIP22项/154881B，SHA256 `663FE3241114AA142C9D5A5D1A418D3A3626E24FAD325E3A3B805B36EBAF1EA9`。原生助手编码/退出码捕获问题修在临时runner，不是产品故障。新版写FIFO真实无线、默认人工审批及用户交互桌面仍未验收；详见 [队列收束](docs/QUEUE_CLOSURE_0143.md)，旧0.14.2有限双PC证据不改写。
+
+## 2026-10-09 — 0.14.2-local 两电脑Room准入增补（本地验证，不更改发布物）
+
+- 既有0.14.2、软件985项/配置和便携包不变；本次只增加真实验证记录，0.14.3 queue优化正在开发，未完成/未验收。
+- PC1 COM_PORT/Board1保持原Room16/incarnation44360405，PC2 Board2以fresh ticket19/boot4247252633申请；真实首页HardwareApprove一次后提交revision2/term1/count2/synchronized=True，join_order为Board1 boot44360405→Board2 boot4247252633。
+- 用户确认PC2显示一致2/6、leader Board1、revision2与同序成员、自身普通成员；没有远端截图/raw。快读真实状态和请求后转实际view程序集实例再点击产品按钮，绕过默认整页刷新以赶8秒窗口，不宣称默认人工审批稳定。
+- 初次临时助手LoadFrom/Default类型强转失败发生在Room写入前，修复助手而非产品；保留失败与成功日志。助手退出后只读本机Room仍2人，不证明PC2退出或掉电持久化。
+- 未CREATE/LEAVE/KICK/新RGB/固件写入；读取的RGB00000001终态来自此前22:46双闪。当前用户Room保留，2人任退一人会解散，保Room的继任验收至少3成员。
+- 用户反馈0.14.2约20项全刷新和_busy整体禁用影响8秒准入窗口，记录为0.14.3 queue待优化，不篡改此轮有限通过或宣布修复完成。证据与限制见 [双PC验证](docs/TWO_PC_ROOM_VALIDATION_20261009.md)。以下单板/发现阶段“尚无JOIN”等描述为当时历史。
+
+## 2026-10-09 — 0.14.2-local 单板RGB闭环与主动发现（本地，未上传）
+
+- 产品0.14.2-local、desktop1.2.1、serial1.2.2、hardware-room0.3.1，Host API1.0；沿用本地固件0.10.2，不改源码/分区/SDK，不上传。
+- RGB硬件许可与执行命令明确分开；专用“本机青色双闪”不依赖成员选中。若未入Room，必须明确确认创建一人真实Room；执行后保留该Room，不自动退出或把单板伪装成多人网络。
+- 执行请求只提交一次；跟踪原QUEUED应用ID，并绑定MAC、room/incarnation/revision/term与目标成员boot。结果跟踪预算12秒，读取终态并快速复核ROOMGET00；换身份/会话、取消、故障或超时标注未知，不自动重发。
+- 已识别且可见的真实页默认首次只读刷新及5秒单飞更新；手动暂停、连续5次失败、换设备、隐藏/销毁与在途取消保留停止边界，设备事件不绕过暂停。USB发现轮询和业务页刷新是不同调度。
+- 固件已有500ms广播发现、1秒邻居单播心跳、6邻居/2秒过期及MAC peer自动注册；附近设备不等于Room成员，leader准入/审批规则不改。原生USB SEARCH本端看到Board2、RSSI=-51dBm，仅单侧发现，尚无多板JOIN闭环。
+- Release/Debug各985项通过：Core136、Serial126、HardwareRoom145、Modules64、Thunder444、Desktop34、Smoke/Guard36；本轮构建退出码0，新增路径的fake检查不作为真机证明。
+- 真机COM_PORT/Board1/CAP99在已有Room16/incarnation44360405、许可false的基线上，用实际首页功能工厂与共享USB所有者，未选成员直接点击本机双闪一次。22:46:34许可true读回（不点灯）、QUEUED一次、phase1→2于22:46:35自动回显；独立RGBRESULT `00000001 2`，随后恢复许可false且保持原Room，未CREATE/LEAVE，不改固件。自动窗体/真实USB/驱动回执通过，人工光学及用户交互桌面未确认，多板准入/审批/继任仍待验收。
+- 独立0.14.2运行目录22便携文件＋3本机快捷方式，ZIP22项/151286B，内容与隔离Release及90源码输入匹配；SHA见本轮记录。没有固件、测试或用户配置混入。统一见 [本轮单板闭环](docs/SINGLE_NODE_CLOSURE_20261009.md)，下方0.14.1/934项和未执行RGB保留早轮历史。
+
+## 2026-10-09 — 0.14.1-local 上位机实际功能闭环（本地，未上传）
+
+- desktop 1.2.0：真实 Room/RGB 页面直接嵌入首页；旧模拟按钮只在演示模式出现，切换保留同一真实控件，不创建第二个 USB 所有者。处理跨线程退出竞态、句柄创建后的设备快照和滚动保持。
+- serial 1.2.2：候选口不等于已连接，分别诊断占用/断开/超时/身份或能力不匹配；按端口与PnP身份去重。保留nonce、受控轮询、单I/O所有者与手动恢复。
+- hardware-room 0.3.0：无设备/不兼容/需刷新/就绪/忙/失效的状态闭环；创建、加入、邀请、审批、踢出、退出和RGB的权限/选择/容量门控及原因提示；拔插共享事件、回执校验、未知状态不自动重放、暂停/销毁停止后续批次。
+- Release/Debug各934项通过：Core136、Serial126、HardwareRoom94、Modules64、Thunder444、Desktop34、内置选择/输出保护36；九插件/profile和UI门通过。
+- 真机COM_PORT / Board1，经实际主表单按钮完成HELLO、刷新、创建一人Room、退出清成员。附近节点0，未操作RGB或固件；这是自动化Form+真实设备证据，不代表人工桌面或多板无线/灯光验收。
+- 新运行目录 `artifacts/NodeConsole-0.14.1/`，保留旧进程和目录；完整便携包不含固件、测试、用户配置及绝对路径快捷方式。详见 [闭环与交付](docs/CLIENT_CLOSURE_20261009.md)。
+
+## 2026-10-05 — 节点控制台定义重构（本地，未上传）
+
+- 收束为ESP32稳定核心、有限资源/任务包与可选PC控制台；游戏优先小状态轻回合，现雷霆保留PC示例，不宣称移植完成。
+- 新增功能范围元数据，区分PC工具、设备控制界面与PC演示；注册表拒绝未知范围并防御复制，管理窗口明确DLL不是板端包。
+- 主窗口改称节点控制台；单USB所有者、惰性功能创建、X/托盘/单实例和受控轮询保持。首次需整套升级共享契约与插件；旧插件→新宿主兼容不等于新插件→旧宿主兼容。
+- 完整Debug/隔离Release各822项通过；新版Release独立放入`artifacts/NodeConsole/`，未停止旧运行客户端。首次旧输出占用失败后按原hash恢复旧共享DLL，22个原运行文件最终均匹配；新增构建前占用检查与13项非破坏回归。旧794项证据归档，新软件证据独立保存。
+- 板端存储/任务、压缩、P2P复制及真正OTA均待实施；未改变固件、SDK/BSP、分区或硬件，未推送。见 [新定义与验收边界](docs/NODE_CONSOLE.md)。
+
+## 2026-10-05 — 本地多人扩展与核对（未上传）
+
+- 从官方thunder-game 3cb3fda下载校验，在独立工作副本扩展 `trilink.thunder` 为0.2.0：2–6人、固定六席和五peer、到齐开局、逐玩家输入/ACK与有界恢复。
+- GameWire v2最高120B，不兼容v1；UDP提供者0.1.0、128B契约、实体池及无后台线程边界保持。PC需统一更新；ESP32桥接未实现。
+- 多人UI/六色HUD、端点配置锁定、隐藏停止重绘；补游戏验证safe-mode、完整世界hash及I/O失败释放回归。
+- 修复多人加入人数显示、隐藏后的停止重绘；3+人按六tick轮换发射优先级，满池不再长期偏向低席位，单/双人顺序不变且不增池/逐tick分配。
+- 完整Release/Debug各794项通过，2/3/6独立UDP进程hash一致；单插件重建与其余运行文件不变验证通过。证据见 [核对记录](docs/THUNDER_REVIEW_20261005.md)，历史0.1.0记录不作为本地0.2.0证据；未修改主干、固件、GPIO或防火墙，未推送/发布。
+
+## 2026-10-05 — 雷霆战机开发插件
+
+- 新增 `trilink.thunder` 0.1.0：像素战机、单人练习、两人合作、固定实体池和整数确定性引擎。
+- 新增 `trilink.game-link` 0.1.0 与加法服务契约：当前IPv4局域网UDP，按需打开、无后台线程，后续ESP32可替换提供者。
+- 30Hz游戏、10Hz批量输入；最高88B游戏报文、有界补发、会话隔离、断线终止；隐藏或关闭联机释放资源。
+- 插件profile、独立构建、解决方案、软件回归与资源预算文档已接入；模块基线调整为九项。
+- 基于最新主干修复的完整Debug构建通过：核心136、SerialLifecycle65、HardwareRoom47、模块53、桌面30、雷霆战机136及内置选择22项，共489项检查；九插件/profile加载、UI和运行目录门通过，双进程UDP世界hash一致。
+- 产品保持 `0.14.0-local`，Host API `1.0`；不改固件、不烧录，ESP32游戏桥接及跨实体PC验收待完成。详见 [雷霆战机](docs/THUNDER.md)。
+
 ## 2026-10-05 — 客户端开发源码同步
 
 - 同步9月22日至10月1日的客户端收束与 review 修复：串口1.2.1、真实 Room/RGB 模块0.2.1；产品保持 `0.14.0-local`，Host API `1.0`，七个首方插件。

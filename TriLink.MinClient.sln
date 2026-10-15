@@ -38,12 +38,30 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TriLink.Plugin.HardwareRoom
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TriLink.HardwareRoom.Tests", "tests\TriLink.HardwareRoom.Tests\TriLink.HardwareRoom.Tests.csproj", "{B4F84C8E-6221-4CC0-A26F-6B709B012013}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TriLink.Plugin.GameLink", "src\Plugins\TriLink.Plugin.GameLink\TriLink.Plugin.GameLink.csproj", "{B4F84C8E-6221-4CC0-A26F-6B709B012014}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TriLink.Plugin.Thunder", "src\Plugins\TriLink.Plugin.Thunder\TriLink.Plugin.Thunder.csproj", "{B4F84C8E-6221-4CC0-A26F-6B709B012015}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TriLink.Thunder.Tests", "tests\TriLink.Thunder.Tests\TriLink.Thunder.Tests.csproj", "{B4F84C8E-6221-4CC0-A26F-6B709B012016}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B4F84C8E-6221-4CC0-A26F-6B709B012014}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B4F84C8E-6221-4CC0-A26F-6B709B012014}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B4F84C8E-6221-4CC0-A26F-6B709B012014}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B4F84C8E-6221-4CC0-A26F-6B709B012014}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B4F84C8E-6221-4CC0-A26F-6B709B012015}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B4F84C8E-6221-4CC0-A26F-6B709B012015}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B4F84C8E-6221-4CC0-A26F-6B709B012015}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B4F84C8E-6221-4CC0-A26F-6B709B012015}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B4F84C8E-6221-4CC0-A26F-6B709B012016}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B4F84C8E-6221-4CC0-A26F-6B709B012016}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B4F84C8E-6221-4CC0-A26F-6B709B012016}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B4F84C8E-6221-4CC0-A26F-6B709B012016}.Release|Any CPU.Build.0 = Release|Any CPU
 		{B4F84C8E-6221-4CC0-A26F-6B709B012013}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{B4F84C8E-6221-4CC0-A26F-6B709B012013}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B4F84C8E-6221-4CC0-A26F-6B709B012013}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -106,6 +124,9 @@ Global
 		{B4F84C8E-6221-4CC0-A26F-6B709B012007}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
+		{B4F84C8E-6221-4CC0-A26F-6B709B012014} = {B4F84C8E-6221-4CC0-A26F-6B709B012102}
+		{B4F84C8E-6221-4CC0-A26F-6B709B012015} = {B4F84C8E-6221-4CC0-A26F-6B709B012102}
+		{B4F84C8E-6221-4CC0-A26F-6B709B012016} = {B4F84C8E-6221-4CC0-A26F-6B709B012103}
 		{B4F84C8E-6221-4CC0-A26F-6B709B012013} = {B4F84C8E-6221-4CC0-A26F-6B709B012103}
 		{B4F84C8E-6221-4CC0-A26F-6B709B012012} = {B4F84C8E-6221-4CC0-A26F-6B709B012102}
 		{B4F84C8E-6221-4CC0-A26F-6B709B012008} = {B4F84C8E-6221-4CC0-A26F-6B709B012102}

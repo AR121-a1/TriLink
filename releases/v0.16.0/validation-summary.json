@@ -1,0 +1,267 @@
+{
+  "schemaVersion": 1,
+  "releaseVersion": "0.16.0",
+  "releaseTag": "v0.16.0",
+  "publicationPreparationDate": "2026-10-15",
+  "summaryType": "Derived, sanitized public validation summary",
+  "provenance": {
+    "originalBuildDate": "2026-10-12",
+    "firmwareBuildId": "20261012-173202-b0407e2b",
+    "originalClientReceiptProduct": "0.16.0-local",
+    "hardwareValidationDate": "2026-10-14",
+    "publicationIntegrityAuditDate": "2026-10-15",
+    "binariesRebuiltForPublication": false,
+    "originalTestSuitesRerunForPublication": false,
+    "originalArtifactsReusedUnmodified": true,
+    "originalClientWorkspaceFrozenInputsMatchedAtAudit": 102,
+    "originalFirmwareWorkspaceFrozenInputsMatchedAtAudit": 130,
+    "publicCheckoutFrozenInputDifferences": {
+      "clientInputsUnchanged": 101,
+      "clientDocumentationOnly": ["tests/README.md"],
+      "firmwareInputsUnchanged": 128,
+      "firmwareToolingOnly": ["tools/build_local.ps1", "tools/test_usb_contract.ps1"],
+      "applicationCodeChanged": false,
+      "note": "The documentation update and two tool adapters are publication-only changes, not a new binary build. Git may normalize source line endings."
+    },
+    "publicCheckoutCompiledSourceAudit": {
+      "clientCSharpFilesCompared": 64,
+      "firmwareCFilesCompared": 46,
+      "mismatches": 0
+    },
+    "publicationToolingChanges": "Packaging, validation and documentation changes are documented separately. Original binary test evidence does not constitute a rerun of changed publication tools.",
+    "historicalReceiptsPreserved": true
+  },
+  "artifacts": [
+    {
+      "file": "TriLink-NodeConsole-0.16.0-Release.zip",
+      "kind": "windows-portable-client",
+      "bytes": 179765,
+      "sha256": "8A91A312C6123F78DC6B664379D5EF8DABCD6204A7F46D44839557F363CC415F",
+      "runtimeFiles": 22,
+      "allRuntimeFileLengthsAndHashesMatched": true,
+      "entryPoint": "TriLink.MinClient.exe",
+      "framework": ".NET Framework 4.8",
+      "firmwareIncluded": false
+    },
+    {
+      "file": "bootloader.bin",
+      "kind": "esp32s3-bootloader",
+      "offset": "0x0",
+      "bytes": 20944,
+      "sha256": "08A35F2DF9F39B70A33E8EB7C481FC971231299663E59ACE48A41ED49C5E74C7"
+    },
+    {
+      "file": "partition-table.bin",
+      "kind": "esp32s3-partition-table",
+      "offset": "0x8000",
+      "bytes": 3072,
+      "sha256": "7F00B6C042A89B15B0CAC534F82ED988CAF29278FF5700B0C511EB1B5BB7C820"
+    },
+    {
+      "file": "esp32s3_wakenic_p2p.bin",
+      "kind": "esp32s3-application",
+      "offset": "0x10000",
+      "bytes": 898736,
+      "sha256": "F5EDD8FB4D35C56614782453E63DAE310DF192F2B6E9CCB5383A366E73CD4143"
+    }
+  ],
+  "firmwareBuild": {
+    "result": "PASS",
+    "freshBuildOnOriginalBuildDate": true,
+    "target": "esp32s3",
+    "espIdf": "5.5.5",
+    "espTinyUsb": "2.0.0",
+    "tinyUsb": "0.18.0~2",
+    "dependencyLockSha256": "7A4AEBD1EA47BD445173911C778C3D8703835C85CD5494D0212815F03EC3352E",
+    "flashBytes": 16777216,
+    "flashMode": "DIO",
+    "flashFrequencyMHz": 80,
+    "psramBytes": 8388608,
+    "psramMode": "octal",
+    "psramFrequencyMHz": 80,
+    "factoryAppOffset": "0x10000",
+    "factoryAppPartitionBytes": 1048576,
+    "otaSlots": false,
+    "partitionLayoutChangedForThisFlashRound": false,
+    "imageHashMeaning": "Hashes identify the original distributable BIN files. esptool applies the requested flash-header settings and verifies the programmed digest.",
+    "staticCapacity": {
+      "result": "PASS",
+      "appBytes": 898736,
+      "appBudgetBytes": 1048576,
+      "appHeadroomBytes": 149840,
+      "diramBytes": 164979,
+      "diramConfiguredBudgetBytes": 196608,
+      "diramConfiguredBudgetHeadroomBytes": 31629,
+      "largestStaticStackFrameBytes": 784,
+      "staticStackFrameBudgetBytes": 1024,
+      "embeddedWebBundleBytes": 14335,
+      "embeddedWebBundleBudgetBytes": 32768,
+      "scope": "Static build and capacity checks; not loaded runtime heap or stack acceptance."
+    }
+  },
+  "softwareValidation": {
+    "date": "2026-10-12",
+    "clientConfigurations": {
+      "Release": {
+        "result": "PASS",
+        "checks": 1244,
+        "core": 136,
+        "serial": 259,
+        "hardwareRoom": 269,
+        "modules": 64,
+        "thunder": 444,
+        "desktop": 34,
+        "smokeAndGuard": 38
+      },
+      "Debug": {
+        "result": "PASS",
+        "checks": 1244,
+        "core": 136,
+        "serial": 259,
+        "hardwareRoom": 269,
+        "modules": 64,
+        "thunder": 444,
+        "desktop": 34,
+        "smokeAndGuard": 38
+      }
+    },
+    "desktopCountMethod": "Assertion PASS lines, excluding two informational desktop/mode summaries.",
+    "crossLanguageCaps": {
+      "result": "PASS",
+      "checks": 260,
+      "scope": "Separate serial lifecycle suite using the firmware C bridge CAPS fixture and PC parser, with fake inventory, serial and HTTP services.",
+      "addedToConfigurationCheckTotals": false
+    },
+    "firmwareCHostTests": {
+      "result": "PASS",
+      "groups": 17,
+      "scope": "Host execution, including fake radio, LED driver and RTOS cases; not physical wireless or RGB acceptance."
+    },
+    "usbLegacyCrossLanguageContract": {
+      "result": "PASS",
+      "deviceRecords": 1,
+      "peerRecords": 6,
+      "endRecords": 1
+    },
+    "chainAndMeshProbeUnitTests": {
+      "result": "PASS",
+      "tests": 8,
+      "scope": "Probe parsing and control unit tests; no live chain or mesh verification."
+    },
+    "embeddedWebJavaScript": {
+      "result": "PASS",
+      "checks": 32,
+      "scope": "Fake DOM, HTTP and logical timers; no browser-to-board or NCM hardware verification."
+    },
+    "overallScope": "Software/fake services, automated rendering and PC loopback. These results do not establish interactive desktop or physical-device integration acceptance."
+  },
+  "hardwareValidation": {
+    "date": "2026-10-14",
+    "boardCount": 3,
+    "hostCount": 1,
+    "executionMode": "One board attached at a time, independently tested on the same Windows host.",
+    "chip": "ESP32-S3 QFN56 revision 0.2",
+    "crystalMHz": 40,
+    "flashBytesPerBoard": 16777216,
+    "psramBytesPerBoard": 8388608,
+    "esptool": "4.12.0",
+    "flashSettings": "DIO / 80 MHz / 16 MB",
+    "secureBootDisabledBeforeWriting": true,
+    "flashEncryptionDisabledBeforeWriting": true,
+    "efusesChanged": false,
+    "eraseAllPerformed": false,
+    "nvsOrPhyPartitionsIncludedInWrite": false,
+    "nvsPreservationBoundary": "The flash command did not overwrite NVS or PHY partitions; SDK initialization may update calibration state during boot.",
+    "boards": [
+      {
+        "label": "Board 1",
+        "flashJedec": "20:7018",
+        "writeDigestChecksPassed": 3,
+        "independentDigestChecksPassed": 3,
+        "idleObservationSeconds": 35,
+        "startupResult": "CORE_READY",
+        "nativeCdcReadOnlyResult": "PASS",
+        "ncmResult": "FAIL_CODE_10"
+      },
+      {
+        "label": "Board 2",
+        "flashJedec": "c8:4018",
+        "writeDigestChecksPassed": 3,
+        "independentDigestChecksPassed": 3,
+        "idleObservationSeconds": 35,
+        "startupResult": "CORE_READY",
+        "nativeCdcReadOnlyResult": "PASS",
+        "ncmResult": "FAIL_CODE_10"
+      },
+      {
+        "label": "Board 3",
+        "flashJedec": "68:4018",
+        "writeDigestChecksPassed": 3,
+        "independentDigestChecksPassed": 3,
+        "idleObservationSeconds": 35,
+        "startupResult": "CORE_READY",
+        "nativeCdcReadOnlyResult": "PASS",
+        "nativeCdcRecoveryNote": "Initial ROM download-mode enumeration was resolved after a user-performed physical reset; no second flash was needed. The initial cause was not proven.",
+        "ncmResult": "FAIL_CODE_10"
+      }
+    ],
+    "cdcReadOnlyTransactionsPerBoard": ["HELLO", "CAPS", "ROOMGET 00", "SEARCH"],
+    "reportedFirmwareVersion": "0.16.0",
+    "reportedNeighborLimit": 6,
+    "reportedMemberLimit": 6,
+    "reportedRouteBodyBytes": 132,
+    "reportedModuleMask": "01",
+    "searchPeerCountPerBoard": 0,
+    "panicWatchdogOrBrownoutObservedInIdleCaptures": false,
+    "scope": "Successful programming, short idle startup and native CDC read-only transactions on three individual boards; not simultaneous three-board wireless operation."
+  },
+  "knownIssues": [
+    {
+      "id": "NCM_WINDOWS_CODE_10",
+      "status": "OPEN_UNPATCHED",
+      "affectedBoardsInThisValidation": 3,
+      "host": {
+        "os": "Windows 11",
+        "displayVersion": "25H2",
+        "build": "26200.9457",
+        "driverProvider": "Microsoft",
+        "driverInf": "usbncm.inf",
+        "driverService": "UsbNcm",
+        "driverVersion": "10.0.26100.9444"
+      },
+      "problemCode": 10,
+      "problemStatus": "0xC0000483",
+      "ncmOperational": false,
+      "dhcpVerified": false,
+      "webVerified": false,
+      "diagnosticCandidate": "Pinned TinyUSB NTB input/output divisor values of 1 match an upstream Windows NCM compatibility issue.",
+      "candidateLocallyProvenByUsbTraceOrPatchAB": false,
+      "patchAppliedToDistributedBuild": false,
+      "driverOrHostRouteChangedDuringValidation": false,
+      "fallback": "Use the native USB CDC interface; its read-only protocol was verified on the validation host.",
+      "upstreamReferences": [
+        "https://github.com/hathach/tinyusb/issues/3913",
+        "https://github.com/hathach/tinyusb/pull/3914/files",
+        "https://github.com/espressif/tinyusb/pull/86"
+      ]
+    }
+  ],
+  "notVerifiedForThisRelease": [
+    "Windows 10 physical-device CDC operation",
+    "Integrated interactive desktop client with the newly flashed boards",
+    "NCM network operation, DHCP or embedded web UI on physical hardware",
+    "Simultaneous multi-board Room synchronization or leader handover",
+    "Physical RGB execution or optical behavior",
+    "Long-duration or loaded wireless, USB and memory behavior",
+    "P2P text/file transfer, plugin transfer or OTA firmware update",
+    "Compatibility with arbitrary ESP32-S3 board variants"
+  ],
+  "complete0160HardwareAcceptance": false,
+  "privacy": {
+    "deviceIdentitiesIncluded": false,
+    "absoluteLocalPathsIncluded": false,
+    "flashBackupsOrBackupHashesIncluded": false,
+    "rawSystemOrHardwareLogsIncluded": false,
+    "note": "Only aggregate results and non-unique board labels are published; original private evidence remains local."
+  }
+}

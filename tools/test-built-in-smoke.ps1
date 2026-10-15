@@ -23,8 +23,9 @@ function Assert-BuiltInArguments([string[]]$Arguments) {
     $profileIndex = [Array]::IndexOf($Arguments, '--profile')
     Assert-Regression ($profileIndex -ge 0 -and $profileIndex + 1 -lt $Arguments.Length -and
         $Arguments[$profileIndex + 1] -eq 'desktop') 'smoke fixes its first profile option to desktop'
-    Assert-Regression (@($Arguments | Where-Object { $_ -ieq '--safe-mode' }).Count -gt 0) `
-        'smoke always selects built-ins with --safe-mode'
+    Assert-Regression (@($Arguments | Where-Object { $_ -ieq '--safe-mode' }).Count -gt 0 -and
+        @($Arguments | Where-Object { $_ -ieq '--demo' }).Count -gt 0) `
+        'smoke selects built-ins offline with --safe-mode and --demo (no automatic hardware scan)'
 }
 
 function Get-SelectionHashes {
@@ -51,15 +52,114 @@ $gateCalls = @($buildAst.FindAll({ param($node)
     $node -is [System.Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Invoke-BuiltInSmokeTests'
 }, $true))
 Assert-Regression ($gateCalls.Count -eq 2) 'full and targeted builds both include the smoke-selection gate'
+$outputPathsFunction = $buildAst.Find({ param($node)
+    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-BuildRuntimeOutputPaths'
+}, $true)
+$outputGuardFunction = $buildAst.Find({ param($node)
+    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Assert-BuildRuntimeOutputsAvailable'
+}, $true)
+Assert-Regression ($null -ne $outputPathsFunction -and $null -ne $outputGuardFunction) `
+    'regression exercises the actual runtime-output preflight functions'
+$outputGuardCalls = @($buildAst.FindAll({ param($node)
+    $node -is [System.Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Assert-BuildRuntimeOutputsAvailable'
+}, $true))
+$outputMutations = @($buildAst.FindAll({ param($node)
+    $node -is [System.Management.Automation.Language.CommandAst] -and
+        $node.GetCommandName() -in @('New-Item', 'Invoke-Compile', 'Copy-Item')
+}, $true))
+Assert-Regression ($outputGuardCalls.Count -eq 1 -and $outputMutations.Count -gt 0 -and
+    @($outputMutations | Where-Object { $_.Extent.StartOffset -le $outputGuardCalls[0].Extent.StartOffset }).Count -eq 0) `
+    'runtime-output preflight precedes all build directory creation, compilation and copying'
+$targetedBranch = $buildAst.Find({ param($node)
+    $node -is [System.Management.Automation.Language.IfStatementAst] -and
+        $node.Extent.Text -match '^if\s*\(\$PluginId\s+-ne\s+''all''\)'
+}, $true)
+Assert-Regression ($null -ne $targetedBranch -and
+    $outputGuardCalls[0].Extent.StartOffset -lt $targetedBranch.Extent.StartOffset -and
+    $outputGuardCalls[0].Extent.Text -match '^Assert-BuildRuntimeOutputsAvailable\s+\$output\s+\$PluginId\s*$') `
+    'full and targeted execution both run preflight with the actual plugin selection'
 $desktopTestSource = [System.IO.File]::ReadAllText((Join-Path $projectRoot 'tests\TriLink.Desktop.Tests\Program.cs'))
 Assert-Regression ([regex]::IsMatch($desktopTestSource,
     'new\s+HostEnvironment\s*\(\s*release\s*,\s*new\[\]\s*\{[^}]*"--safe-mode"[^}]*\}\s*,\s*"desktop"\s*\)')) `
     'desktop lifecycle regression also fixes safe mode and the built-in desktop profile'
 
-# Only the one function is evaluated. Never execute build.ps1 or start a client process.
+$thunderTestSource = [System.IO.File]::ReadAllText((Join-Path $projectRoot 'tests\TriLink.Thunder.Tests\Program.cs'))
+Assert-Regression ([regex]::IsMatch($thunderTestSource,
+    'new\s+HostEnvironment\s*\(\s*runtimeRoot\s*,\s*new\[\]\s*\{[^}]*"--demo"[^}]*"--safe-mode"[^}]*\}\s*,\s*"desktop"\s*\)')) `
+    'game integration regression also isolates rebuilt built-ins from user overlays'
+
+# Only extracted functions are evaluated. Never execute build.ps1 or start a client process.
 . ([ScriptBlock]::Create($smokeFunction.Extent.Text))
+. ([ScriptBlock]::Create($outputPathsFunction.Extent.Text))
+. ([ScriptBlock]::Create($outputGuardFunction.Extent.Text))
 $fixtureRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('trilink-built-in-smoke-' + [guid]::NewGuid().ToString('N'))
 $null = New-Item -ItemType Directory -Path $fixtureRoot
+$guardFixture = Join-Path $fixtureRoot 'runtime-output-guard'
+$fullTargets = @(Get-BuildRuntimeOutputPaths $guardFixture 'all')
+$targetedTargets = @(Get-BuildRuntimeOutputPaths $guardFixture 'trilink.thunder')
+Assert-Regression ($fullTargets.Count -eq 12 -and @($fullTargets | Select-Object -Unique).Count -eq 12 -and
+    $fullTargets -contains (Join-Path $guardFixture 'TriLink.Plugin.Abstractions.dll') -and
+    $fullTargets -contains (Join-Path $guardFixture 'TriLink.PluginHost.dll') -and
+    $fullTargets -contains (Join-Path $guardFixture 'TriLink.MinClient.exe')) `
+    'full preflight covers all three runtime roots and nine distinct built-in DLLs'
+Assert-Regression ($targetedTargets.Count -eq 1 -and
+    $targetedTargets[0] -eq (Join-Path $guardFixture 'plugins\trilink.thunder\TriLink.Plugin.Thunder.dll')) `
+    'targeted preflight covers only the selected plugin runtime DLL'
+Assert-BuildRuntimeOutputsAvailable $guardFixture 'all'
+Assert-BuildRuntimeOutputsAvailable $guardFixture 'trilink.thunder'
+Assert-Regression (-not (Test-Path -LiteralPath $guardFixture)) `
+    'first-build preflight permits missing outputs without creating directories or files'
+$guardHashes = @{}
+foreach ($target in $fullTargets) {
+    $null = New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force
+    [System.IO.File]::WriteAllBytes($target, [System.Text.Encoding]::UTF8.GetBytes('TEMP output fixture: ' + $target))
+    $guardHashes[$target] = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash
+}
+Assert-BuildRuntimeOutputsAvailable $guardFixture 'all'
+Assert-BuildRuntimeOutputsAvailable $guardFixture 'trilink.thunder'
+Assert-Regression (@($fullTargets | Where-Object {
+    -not (Test-Path -LiteralPath $_ -PathType Leaf) -or
+        (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash -ne $guardHashes[$_]
+}).Count -eq 0) 'unlocked full and targeted preflight preserve every output byte and file'
+$rootLock = [System.IO.File]::Open($fullTargets[0], [System.IO.FileMode]::Open,
+    [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+try {
+    $rejected = $false
+    $guardError = ''
+    try { Assert-BuildRuntimeOutputsAvailable $guardFixture 'all' }
+    catch { $rejected = $true; $guardError = $_.Exception.Message }
+    Assert-Regression ($rejected -and $guardError.StartsWith('Build output is in use or unavailable: ' + $fullTargets[0] + '.') -and
+        -not $guardError.Contains('{0}') -and $guardError.Contains('tray > Exit')) `
+        'locked root output rejects a full build and tells the user to exit from the tray'
+    $lockedBytes = New-Object byte[] ([int]$rootLock.Length)
+    $rootLock.Position = 0
+    $read = $rootLock.Read($lockedBytes, 0, $lockedBytes.Length)
+    Assert-Regression ((Test-Path -LiteralPath $fullTargets[0] -PathType Leaf) -and
+        $read -eq $lockedBytes.Length -and
+        [System.Text.Encoding]::UTF8.GetString($lockedBytes) -eq ('TEMP output fixture: ' + $fullTargets[0])) `
+        'rejected preflight leaves the locked output present with identical bytes'
+}
+finally { $rootLock.Dispose() }
+$pluginLockPath = Join-Path $guardFixture 'plugins\trilink.hardware-room\TriLink.Plugin.HardwareRoom.dll'
+$pluginLock = [System.IO.File]::Open($pluginLockPath, [System.IO.FileMode]::Open,
+    [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+try {
+    $rejected = $false
+    try { Assert-BuildRuntimeOutputsAvailable $guardFixture 'all' } catch { $rejected = $true }
+    Assert-Regression $rejected 'locked built-in plugin rejects a full build before compilation'
+    Assert-BuildRuntimeOutputsAvailable $guardFixture 'trilink.thunder'
+    Assert-Regression $true 'unrelated plugin lock does not block a targeted update'
+    $rejected = $false
+    try { Assert-BuildRuntimeOutputsAvailable $guardFixture 'trilink.hardware-room' } catch { $rejected = $true }
+    Assert-Regression $rejected 'selected plugin lock rejects its targeted update'
+}
+finally { $pluginLock.Dispose() }
+Assert-BuildRuntimeOutputsAvailable $guardFixture 'all'
+Assert-BuildRuntimeOutputsAvailable $guardFixture 'trilink.hardware-room'
+Assert-Regression (@($fullTargets | Where-Object {
+    -not (Test-Path -LiteralPath $_ -PathType Leaf) -or
+        (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash -ne $guardHashes[$_]
+}).Count -eq 0) 'released locks allow preflight again and all rejected outputs remain unchanged'
 $uiOutput = Join-Path $fixtureRoot 'ui'
 $null = New-Item -ItemType Directory -Path $uiOutput
 $client = Join-Path $fixtureRoot 'not-started.exe'
@@ -95,6 +195,14 @@ $null = Invoke-UnsafeSmokeFixture 'unsafe.png' @() 6> $null
 $rejected = $false
 try { Assert-BuiltInArguments $script:capturedArguments } catch { $rejected = $true }
 Assert-Regression $rejected 'regression rejects a smoke command with safe mode removed'
+
+$hardwareMutant = $smokeFunction.Extent.Text.Replace("function Invoke-UiSmoke(", "function Invoke-HardwareSmokeFixture(")
+$hardwareMutant = $hardwareMutant.Replace("'--demo', ", '')
+. ([ScriptBlock]::Create($hardwareMutant))
+$null = Invoke-HardwareSmokeFixture 'hardware-unsafe.png' @() 6> $null
+$rejected = $false
+try { Assert-BuiltInArguments $script:capturedArguments } catch { $rejected = $true }
+Assert-Regression $rejected 'regression rejects a smoke command that would automatically scan real hardware'
 
 $script:launchExitCode = 2
 $rejected = $false

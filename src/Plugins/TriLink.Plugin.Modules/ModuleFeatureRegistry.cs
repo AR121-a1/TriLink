@@ -21,6 +21,8 @@ namespace TriLink.Plugins.Modules
             if (feature == null || string.IsNullOrWhiteSpace(feature.Id) || string.IsNullOrWhiteSpace(feature.ModuleId)
                 || string.IsNullOrWhiteSpace(feature.Title) || createView == null)
             { throw new ArgumentException("A module feature requires identity, title and view factory."); }
+            if (!Enum.IsDefined(typeof(ModuleFeatureScope), feature.Scope))
+            { throw new ArgumentException("Unknown desktop feature scope.", nameof(feature)); }
             if (_entries.ContainsKey(feature.Id)) { throw new InvalidOperationException("Duplicate feature: " + feature.Id); }
             var entry = new Entry { Feature = Copy(feature), Factory = createView };
             _entries.Add(feature.Id, entry);
@@ -35,7 +37,8 @@ namespace TriLink.Plugins.Modules
         }
         public void Dispose() { _entries.Clear(); _disposed = true; }
         private static ModuleFeature Copy(ModuleFeature value)
-        { return new ModuleFeature { Id = value.Id, ModuleId = value.ModuleId, Title = value.Title, Description = value.Description }; }
+        { return new ModuleFeature { Id = value.Id, ModuleId = value.ModuleId, Title = value.Title,
+            Description = value.Description, Scope = value.Scope }; }
         private sealed class Entry { public ModuleFeature Feature; public Func<Control> Factory; }
         private sealed class Lease : IDisposable
         {

@@ -21,6 +21,7 @@ namespace TriLink.MinClient
         private readonly Button _cancel = new Button();
         private readonly Button _restore = new Button();
         private readonly ComboBox _featureChoices = new ComboBox();
+        private string _moduleDetails = string.Empty;
         private ModuleSnapshot _snapshot;
         private bool _refreshing;
         private bool _busy;
@@ -29,7 +30,7 @@ namespace TriLink.MinClient
         {
             _manager = manager;
             _features = features;
-            Text = "TriLink · 扩展模块";
+            Text = "TriLink · 本机 PC 扩展";
             Font = new Font("Microsoft YaHei UI", 9F);
             Size = new Size(1060, 780);
             MinimumSize = new Size(960, 700);
@@ -42,7 +43,7 @@ namespace TriLink.MinClient
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 80));
-            layout.Controls.Add(new Label { Text = "扩展模块\n管理本机功能包：查看详情 → 启用 / 禁用 → 从托盘退出并重新启动。",
+            layout.Controls.Add(new Label { Text = "本机 PC 扩展\n管理 Windows .NET 界面模块；不是 S3 资源包、任务包或固件。启停 / 更新在客户端下次启动生效。",
                 Dock = DockStyle.Fill, ForeColor = Color.FromArgb(31, 90, 150) }, 0, 0);
             _grid.Dock = DockStyle.Fill;
             _grid.ReadOnly = true;
@@ -77,6 +78,7 @@ namespace TriLink.MinClient
             _featureChoices.DropDownStyle = ComboBoxStyle.DropDownList;
             _featureChoices.DisplayMember = "Title";
             _featureChoices.Width = 180;
+            _featureChoices.SelectedIndexChanged += (_, __) => ShowFeatureScope();
             actions.Controls.Add(_featureChoices);
             _open.Text = "打开功能";
             _open.AutoSize = true;
@@ -87,7 +89,7 @@ namespace TriLink.MinClient
             actions.Controls.Add(refresh);
             layout.Controls.Add(actions, 0, 3);
             var packages = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Padding = new Padding(0, 5, 0, 0) };
-            _import.Text = "导入 / 更新模块…";
+            _import.Text = "导入 / 更新 PC 扩展…";
             _import.AutoSize = true;
             _import.Click += async (_, __) => await ImportPackageAsync();
             _cancel.Text = "撤销本次配置变更";
@@ -147,20 +149,42 @@ namespace TriLink.MinClient
             _featureChoices.Items.Clear();
             if (item != null)
             {
-                _details.Text = item.Name + "  |  " + item.Id + "\r\n"
+                _moduleDetails = item.Name + "  |  " + item.Id + "\r\n"
                     + "模块能力：" + string.Join(", ", item.Capabilities) + "\r\n"
                     + "依赖模块：" + List(item.Dependencies) + "\r\n"
                     + "依赖服务：" + List(item.RequiredServices) + "\r\n"
                     + "提供服务：" + List(item.ProvidedServices) + "\r\n"
                     + "下次加载位置：" + item.SourceDirectory + "\r\n"
                     + (item.DisableBlockedReason ?? "可独立启停；变更不会中断本次运行。") + "\r\n"
-                    + "模块 DLL 与客户端权限相同，完整性校验不等于可信签名。";
+                    + "PC 模块 DLL 与客户端权限相同，完整性校验不等于可信签名；不能作为板端包下发。";
                 foreach (var feature in _features.Features.Where(value => value.ModuleId == item.Id))
                 { _featureChoices.Items.Add(feature); }
             }
-            else { _details.Text = "没有可显示的模块。可刷新状态或恢复内置配置。"; }
+            else { _moduleDetails = "没有可显示的 PC 扩展。可刷新状态或恢复内置配置。"; }
             if (_featureChoices.Items.Count > 0) { _featureChoices.SelectedIndex = 0; }
+            ShowFeatureScope();
             _open.Enabled = !_busy && _featureChoices.Items.Count > 0;
+        }
+
+        private void ShowFeatureScope()
+        {
+            var feature = _featureChoices.SelectedItem as ModuleFeature;
+            // Keep the execution scope visible even at the minimum window size.
+            _details.Text = (feature == null ? string.Empty
+                : "所选功能：" + feature.Title + "\r\n功能范围：" + ScopeText(feature.Scope)
+                    + (string.IsNullOrWhiteSpace(feature.Description) ? string.Empty : "\r\n" + feature.Description)
+                    + "\r\n\r\n") + _moduleDetails;
+        }
+
+        private static string ScopeText(ModuleFeatureScope scope)
+        {
+            switch (scope)
+            {
+                case ModuleFeatureScope.DesktopTool: return "本机工具 · PC 执行";
+                case ModuleFeatureScope.DeviceControl: return "设备控制界面 · PC 管理 / 板端执行；需已确认的固件能力";
+                case ModuleFeatureScope.DesktopDemo: return "PC 演示 · 非板端任务包";
+                default: return "未知范围 · 不支持";
+            }
         }
 
         private void Apply(Action action, string success)
@@ -179,12 +203,12 @@ namespace TriLink.MinClient
             _status.ForeColor = error ? Color.Firebrick : Color.FromArgb(31, 90, 150);
             _status.Text = (error ? "错误 · " : _snapshot?.RestartRequired == true ? "待重启 · " : "就绪 · ")
                 + (message ?? "扩展管理已就绪。") + "\r\n" + (_snapshot?.Notice ?? "可尝试恢复内置模块。")
-                + "\r\n包格式：plugin.json + 单个 DLL；没有热卸载、在线下载或自动执行安装脚本。";
+                + "\r\nPC 包格式：plugin.json + 单个 .NET DLL；无热卸载 / 在线下载 / 安装脚本；不是板端包安装入口。";
         }
 
         private async Task ImportPackageAsync()
         {
-            using (var picker = new OpenFileDialog { Title = "选择可信模块包的 plugin.json", Filter = "模块清单 (plugin.json)|plugin.json", CheckFileExists = true })
+            using (var picker = new OpenFileDialog { Title = "选择可信 PC 扩展的 plugin.json", Filter = "PC 扩展清单 (plugin.json)|plugin.json", CheckFileExists = true })
             {
                 if (picker.ShowDialog(this) != DialogResult.OK) { return; }
                 _busy = true;

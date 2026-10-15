@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "trilink.game-link",
+  "displayName": "局域网游戏传输（UDP）",
+  "version": "0.1.0",
+  "hostApi": "1.0",
+  "enabled": true,
+  "entryAssembly": "TriLink.Plugin.GameLink.dll",
+  "entryType": "TriLink.Plugins.GameLink.GameLinkPlugin",
+  "dependencies": [],
+  "requiresServices": [],
+  "providesServices": ["trilink.game-link"],
+  "capabilities": ["ipv4-lan", "bounded-game-datagrams", "on-demand-session", "nonblocking-poll"]
+}

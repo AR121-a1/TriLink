@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "releaseVersion": "0.16.0",
+  "sourceTag": "v0.16.0",
+  "publicationDate": "2026-10-15",
+  "releaseStatus": "development-prerelease",
+  "repository": "https://github.com/AR121-a1/TriLink",
+  "originalBuildDate": "2026-10-12",
+  "firmwareBuildId": "20261012-173202-b0407e2b",
+  "binariesRebuiltForPublication": false,
+  "downloads": [
+    {
+      "file": "TriLink-NodeConsole-0.16.0-Release.zip",
+      "bytes": 179765,
+      "sha256": "8A91A312C6123F78DC6B664379D5EF8DABCD6204A7F46D44839557F363CC415F",
+      "files": 22,
+      "entryPoint": "TriLink.MinClient.exe"
+    },
+    {
+      "file": "TriLink-Firmware-0.16.0.zip",
+      "bytes": 742398,
+      "sha256": "1E537106EE9E2A1D78F7449193ECE866EA44C015904CE521CE76676E8455594A",
+      "files": 34,
+      "contents": "Three original BINs, flash map, original source manifest, dependency lock, validation summary and redistribution notices."
+    },
+    {
+      "file": "validation-summary.json",
+      "bytes": 10366,
+      "sha256": "6346135C7BF8B93167699BFFD4368A112483EA6902DAEF87B0D037F9BAC02D80",
+      "contents": "Sanitized derived validation summary; identical copy inside the firmware ZIP."
+    }
+  ],
+  "firmwareImages": [
+    {
+      "archive": "TriLink-Firmware-0.16.0.zip",
+      "entry": "bootloader.bin",
+      "offset": "0x0",
+      "bytes": 20944,
+      "sha256": "08A35F2DF9F39B70A33E8EB7C481FC971231299663E59ACE48A41ED49C5E74C7"
+    },
+    {
+      "archive": "TriLink-Firmware-0.16.0.zip",
+      "entry": "partition-table.bin",
+      "offset": "0x8000",
+      "bytes": 3072,
+      "sha256": "7F00B6C042A89B15B0CAC534F82ED988CAF29278FF5700B0C511EB1B5BB7C820"
+    },
+    {
+      "archive": "TriLink-Firmware-0.16.0.zip",
+      "entry": "esp32s3_wakenic_p2p.bin",
+      "offset": "0x10000",
+      "bytes": 898736,
+      "sha256": "F5EDD8FB4D35C56614782453E63DAE310DF192F2B6E9CCB5383A366E73CD4143"
+    }
+  ],
+  "sourceProvenance": {
+    "clientRoot": ".",
+    "firmwareRoot": "firmware",
+    "applicationCodeChangedForPublication": false,
+    "firmwareConfigurationOrLockChangedForPublication": false,
+    "clientDocumentationChanges": [
+      {
+        "file": "tests/README.md",
+        "originalBuildInputSha256": "3C019092C5DD14DD8592B9DD829833F2A13710DE263ED697105E2E88096AFA88",
+        "publicUtf8LfSha256": "2EDD5D4657F524837B212BA2547D6BA79DD5D4EDDB1FDF5444504349ED752E5B",
+        "change": "Update current test documentation, remove a dead local evidence link and anonymize historical device identities."
+      }
+    ],
+    "originalFirmwareSourceManifest": {
+      "archive": "TriLink-Firmware-0.16.0.zip",
+      "entry": "source-manifest.csv",
+      "inputs": 130,
+      "sha256": "83CCF3D0FB587880D12AAF94E93217BA266221CC9AC7BCBD3ED21E8FEC4B223F"
+    },
+    "publicationToolingChanges": [
+      {
+        "file": "firmware/tools/test_usb_contract.ps1",
+        "originalBuildInputSha256": "60D0AC4BCCEE0A5213541CDFFB143D58BCA6958F267593F869238343BFCFDA73",
+        "publicUtf8LfSha256": "C3B26B32B73880681D02A6673E0B50310E5AC8937ADDA724160617E61C993DD4",
+        "change": "Discover the client parser in public and legacy layouts; discover Roslyn or accept an explicit path."
+      },
+      {
+        "file": "firmware/tools/build_local.ps1",
+        "originalBuildInputSha256": "74B43A2FDC9C9F694DBC41265488E2FEB1AD4B6D6BFAA1291270CAA61122E1F4",
+        "publicUtf8LfSha256": "C7EB96611DD2EF8FD55DE7E35F2A99FC3D464FEED32EBC962051D5FBCE3B0939",
+        "change": "Forward optional client-root and C# compiler overrides."
+      }
+    ],
+    "lineEndingNote": "Git attributes normalize source line endings. The original build manifest hashes original frozen bytes; public tool hashes use UTF-8 with LF line endings.",
+    "toolingValidation": "Automatic and explicit USB fixture/real PC parser contract tests passed (DEVICE=1, PEER=6, END=1). Full firmware build and physical-device tests were not rerun for this publication."
+  },
+  "knownIssue": "NCM Code 10 / 0xC0000483 on the tested Windows host remains unpatched. Native CDC read-only control passed independently on three boards.",
+  "excluded": [
+    "Device Flash backups and NVS/PHY dumps",
+    "Machine-local user configuration and credentials",
+    "Raw system or hardware logs and screenshots",
+    "SDK caches, build trees and local scratch files"
+  ]
+}

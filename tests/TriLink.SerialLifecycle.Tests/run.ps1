@@ -1,13 +1,21 @@
 [CmdletBinding()]
 param(
     [string]$OutputDirectory,
-    [string]$AbstractionsPath
+    [string]$AbstractionsPath,
+    [string]$CscPath,
+    [string]$FrameworkPath,
+    [string]$CapsFixture,
+    [string]$CapsVersion = '0.15.0'
 )
 
 $ErrorActionPreference = 'Stop'
 $taskProject = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$taskCompiler = 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\Roslyn\csc.exe'
-$taskFramework = 'C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.8'
+$taskCompiler = if ([string]::IsNullOrWhiteSpace($CscPath)) {
+    'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\Roslyn\csc.exe'
+} else { $CscPath }
+$taskFramework = if ([string]::IsNullOrWhiteSpace($FrameworkPath)) {
+    'C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.8'
+} else { $FrameworkPath }
 if (-not (Test-Path -LiteralPath $taskCompiler -PathType Leaf)) { throw 'Verified Roslyn compiler is unavailable.' }
 if (-not $OutputDirectory) {
     $OutputDirectory = Join-Path ([IO.Path]::GetTempPath()) ('trilink-serial-tests-' + [Guid]::NewGuid().ToString('N'))
@@ -33,8 +41,9 @@ if ($AbstractionsPath -ne $taskLocalAbstractions) {
 $taskSources = @(Get-ChildItem -LiteralPath (Join-Path $taskProject 'src\Plugins\TriLink.Plugin.Serial') -Filter '*.cs' -File | ForEach-Object FullName)
 $taskExecutable = Join-Path $taskOutput 'TriLink.SerialLifecycle.Tests.exe'
 & $taskCompiler @taskOptions @taskReferences ('/reference:' + $AbstractionsPath) '/target:exe' `
-    ('/out:' + $taskExecutable) @taskSources (Join-Path $PSScriptRoot 'Program.cs')
+    ('/out:' + $taskExecutable) @taskSources @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.cs' -File | ForEach-Object FullName)
 if ($LASTEXITCODE -ne 0) { throw 'Serial lifecycle compilation failed.' }
-& $taskExecutable
+if ($CapsFixture) { & $taskExecutable --caps-fixture $CapsFixture --caps-version $CapsVersion }
+else { & $taskExecutable }
 if ($LASTEXITCODE -ne 0) { throw 'Serial lifecycle regression failed.' }
 Write-Host "PASS serial-lifecycle=$taskExecutable"
